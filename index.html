@@ -1469,21 +1469,80 @@ function greedyPartial(form){
     html+='<div class="xirow"><div class="sl">'+slots[i]+'</div><div class="pl">'+(c?'<b>'+esc(c.label)+'</b><div class="m">'+cardMeta(c)+'</div>':'<b style="color:var(--bad)">\u2014 none</b><div class="m">no spare card can play here</div>')+'</div><div class="r">'+(c?c.rating:'')+'</div></div>';}
   return {filled,html,pick,slots};
 }
-// Emergency completion: drop best leftover cards into empty slots OUT OF POSITION (0 chem, no links).
-// Only used when no legal full XI exists. Lets you see a full board + manually swap in a bust later.
+// Emergency completion: when no full legal XI exists, first try to optimally solve the slots that
+// DO have eligible cards (using the real DFS solver), then drop the best remaining cards
+// OUT OF POSITION into any slots still empty. This means a single bust = a free slot and the
+// solver still finds the best legal arrangement before falling back.
 function completeOOP(form){
-  const part=greedyPartial(form), slots=part.slots, pick=part.pick.slice();
+  const slots=form.slots;
   const groupOf=c=>c.hold||('C'+c.id);
+  const cand=slots.map(s=>cards.filter(c=>c.pos.includes(s)));
+
+  const coverableIdx=slots.map((_,i)=>cand[i].length>0?i:-1).filter(i=>i>=0);
+
+  const pick=new Array(slots.length).fill(null);
+  const oop=new Array(slots.length).fill(false);
+
+  if(coverableIdx.length>0){
+    // Build a sub-form with only the coverable slots and run the real solver on it.
+    const subForm={name:form.name,slots:coverableIdx.map(i=>slots[i])};
+    const r=solveBest(subForm,cards,1500000);
+    if(r.bestXIs&&r.bestXIs.length){
+      const bestXI=r.bestXIs[0].xi;
+      coverableIdx.forEach((slotI,k)=>{pick[slotI]=bestXI[k];});
+    } else {
+      // Fallback: greedy partial for the coverable slots
+      const part=greedyPartial(form);
+      coverableIdx.forEach(i=>{if(part.pick[i])pick[i]=part.pick[i];});
+    }
+  }
+
+  // Collect spare cards (not already placed in-position) for OOP slots.
   const usedG=new Set(pick.filter(Boolean).map(groupOf));
   const seen=new Set();
-  const spare=cards.filter(c=>{const g=groupOf(c); if(usedG.has(g)||seen.has(g))return false; seen.add(g); return true;})
-                   .sort((a,b)=>b.rating-a.rating);
-  let si=0; const oop=new Array(slots.length).fill(false);
-  for(let i=0;i<slots.length;i++){ if(!pick[i] && si<spare.length){ pick[i]=spare[si++]; oop[i]=true; } }
-  const full11=pick.every(Boolean);
-  let sc=null,chem=0;
-  if(full11){ sc=scoreXI(pick); chem=trueChem(pick.filter((c,i)=>!oop[i])); } // oop excluded -> 0 chem, no links
-  return {slots,pick,oop,full11,sc,chem,oopCount:oop.filter(Boolean).length};
+  const sparePool=cards.filter(c=>{const g=groupOf(c); if(usedG.has(g)||seen.has(g))return false; seen.add(g); return true;});
+
+  // Identify which slots need OOP fill.
+  const oopSlotIdx=[];
+  for(let i=0;i<slots.length;i++){ if(!pick[i]) oopSlotIdx.push(i); }
+
+  // Brute-force mini-solver: try every permutation of spare cards into OOP slots.
+  // Even 3 OOP slots x 15 spares = 15x14x13 = 2730 combos — milliseconds.
+  // OOP cards earn 0 chem but DO contribute nation/league/club counts to the total.
+  function scoreOOPAssignment(baseOopIdx,assigned){
+    const full=pick.slice();
+    baseOopIdx.forEach((si,k)=>{full[si]=assigned[k];});
+    const inPos=full.filter((_,i)=>!baseOopIdx.includes(i));
+    const chem=trueChem(inPos); // OOP cards get 0 chem
+    const sc=scoreXI(full);     // nations/leagues/clubs counted from all 11
+    return {score:sc.rating+chem+sc.nations+sc.leagues+sc.clubs,sc,chem,pick:full};
+  }
+  let bestOOP=null;
+  function permuteOOP(pool,chosen){
+    if(chosen.length===oopSlotIdx.length){
+      const res=scoreOOPAssignment(oopSlotIdx,chosen);
+      if(!bestOOP||res.score>bestOOP.score) bestOOP=res;
+      return;
+    }
+    for(let i=0;i<pool.length;i++){
+      const rest=pool.slice();rest.splice(i,1);
+      permuteOOP(rest,[...chosen,pool[i]]);
+    }
+  }
+  if(oopSlotIdx.length>0 && sparePool.length>0){
+    permuteOOP(sparePool.slice(0,12),[]); // cap at 12 spares: worst case 12P3=1320 combos
+  }
+
+  let finalPick=pick.slice(), finalOop=oop.slice(), finalSc=null, finalChem=0;
+  if(bestOOP){
+    finalPick=bestOOP.pick;
+    oopSlotIdx.forEach(i=>{finalOop[i]=true;});
+    finalSc=bestOOP.sc; finalChem=bestOOP.chem;
+  } else if(pick.every(Boolean)){
+    finalSc=scoreXI(pick); finalChem=trueChem(pick);
+  }
+  const full11=finalPick.every(Boolean);
+  return {slots,pick:finalPick,oop:finalOop,full11,sc:finalSc,chem:finalChem,oopCount:oopSlotIdx.length};
 }
 function _showSolverOverlay(){
   const ov=$('#solverOverlay'),bd=$('#solverBadge');
@@ -1525,7 +1584,14 @@ function _runSolveInner(cap){
     if(em.full11&&em.sc){const t=em.sc.rating+em.chem+em.sc.nations+em.sc.leagues+em.sc.clubs;
       score='<div class="panel"><h2>Approx score (emergency)</h2><div class="bigrow"><div class="tot">'+t+'</div><div class="m">rating '+em.sc.rating+' \u00b7 chem '+em.chem+'/33 \u00b7 '+em.sc.nations+' nat \u00b7 '+em.sc.leagues+' lg \u00b7 '+em.sc.clubs+' clb<br><span style="color:var(--bad)">'+em.oopCount+' card'+(em.oopCount===1?'':'s')+' out of position (0 chem each)</span> \u2014 real score rises once you fix coverage.</div></div></div>';}
     out.innerHTML=head+'<div class="panel"><h2>Emergency fill</h2><div class="xi">'+rows+'</div></div>'+score;
-    $('#mgrPanel').style.display='none';return;}
+    if(em.full11&&em.sc){const usedIds=new Set(em.pick.filter(Boolean).map(c=>c.id));
+      // em.sc already has correct nations/leagues/clubs; em.chem is trueChem of in-position cards.
+      // Patch sc so .total and .chem reflect the actual emergency score (no full-33 inflation).
+      const emSc=Object.assign({},em.sc,{chem:em.chem,total:em.sc.rating+em.chem+em.sc.nations+em.sc.leagues+em.sc.clubs});
+      // oopIds: set of card ids that are OOP placeholders — pickMgr uses this to score subs correctly.
+      const oopIds=new Set(em.pick.filter((_,i)=>em.oop[i]).map(c=>c&&c.id));
+      window._solved={main:{sc:emSc,xi:em.pick.filter(Boolean)},form,oopIds};window._bench=cards.filter(c=>!c.hold&&!usedIds.has(c.id)).map(c=>({c,why:''}));$('#mgrPanel').style.display='block';}else{$('#mgrPanel').style.display='none';}
+    return;}
   // capped: show best-so-far with option to keep searching at 3x the cap
   if(r.capped){
     const nextCap=cap*3;
@@ -1691,7 +1757,19 @@ function pickMgr(){
     consider(m,asIs,asIsGain,null,asIs,baseSc);
     bench.forEach(b=>{for(let i=0;i<mainXI.length;i++){
       if(b.id===mainXI[i].id||!(b.pos||[]).includes(form.slots[i]))continue;
-      const newXI=mainXI.slice();newXI[i]=b;const sc2=scoreXI(newXI);
+      const newXI=mainXI.slice();newXI[i]=b;
+      // Score the sub XI correctly: in emergency mode some slots are OOP (0 chem).
+      // After the sub, card at slot i changes — recompute which are still OOP.
+      const oopIds=window._solved.oopIds;
+      const sc2base=scoreXI(newXI);
+      let sc2;
+      if(oopIds&&oopIds.size>0){
+        const newOopIds=new Set(oopIds);newOopIds.delete(mainXI[i].id); // outgoing card removed
+        // incoming bench card (b) is in-position, so not OOP
+        const inPos2=newXI.filter(c=>!newOopIds.has(c.id));
+        const chem2=trueChem(inPos2);
+        sc2=Object.assign({},sc2base,{chem:chem2,total:sc2base.rating+chem2+sc2base.nations+sc2base.leagues+sc2base.clubs});
+      } else { sc2=sc2base; }
       consider(m,sc2.total+mgrGain(sc2,m),mgrGain(sc2,m),{inC:b,outC:mainXI[i],slot:form.slots[i]},asIs,sc2);
     }});
   });
