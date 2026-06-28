@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta property="og:description" content="DraftSolver">
-<title>Draft Solver v4.6.6</title>
+<title>Draft Solver v5.4</title>
 <style>
 :root{
   --bg:#05080c; --panel:#0c131b; --panel2:#111c27; --line:#1d2c3a;
@@ -118,7 +118,7 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
 </head>
 <body>
 <header>
-  <h1 class="cap">&#11041; Draft Solver <span style="font-size:11px;opacity:.55;font-weight:400;letter-spacing:0">v4.6.6</span></h1>
+  <h1 class="cap">&#11041; Draft Solver <span style="font-size:11px;opacity:.55;font-weight:400;letter-spacing:0">v5.4</span></h1>
   <div class="cap sub">pacwyn draft optimiser</div>
 </header>
 
@@ -133,7 +133,6 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
 <!-- ===================== FORMATION ===================== -->
 <div class="view on" id="v-form">
 <div class="wrap">
-  <div class="note"><b>3 at the back always ranks first</b> — it skips the weak LB/RB slots entirely, which matters more than any midfield stacking. Below that, 4 and 5 at the back rank together by slot quality (a strong 5 can beat a weak 4). Within a group, slots are scored by quality: CDM is strongest, then CAM/CB/ST, then the rest, with LM/RM the weakest. 3-4-3 ranks last of the back-three shapes because it leans on two wide pairs (LM/RM <i>and</i> LW/RW).</div>
   <div style="position:relative;margin-bottom:8px">
     <input type="text" id="formSearch" placeholder="&#128269; Search formations e.g. 4, 42, 433&hellip;" autocomplete="off" oninput="filterForms()" style="padding-left:12px">
     <button id="formSearchClear" onclick="clearFormSearch()" style="display:none;position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--mut);font-size:18px;cursor:pointer;padding:0;line-height:1">&#10005;</button>
@@ -149,7 +148,7 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
   <div id="comparePanel" style="display:none;margin-top:12px">
     <div class="panel" style="margin:0">
       <h2>&#9878; Compare formations</h2>
-      <div class="tiny" style="margin-bottom:10px">Tap up to 5 formations in the grid above, then run the comparison. 3-at-the-back always ranks first.</div>
+      <div class="tiny" style="margin-bottom:10px">Tap up to 5 formations in the grid above, then run the comparison.</div>
       <div id="compareTray" style="display:flex;flex-wrap:wrap;gap:6px;min-height:34px;margin-bottom:10px;align-items:center">
         <span class="tiny" style="color:var(--mut)">Tap formations above to add (up to 5)</span>
       </div>
@@ -249,7 +248,32 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
       <div id="editFormList" style="display:flex;flex-direction:column;gap:7px;max-height:55vh;overflow-y:auto"></div>
     </div>
   </div>
-  <button class="btn" onclick="runSolve()" style="margin-bottom:12px">Solve best XI</button>
+  <button class="btn" onclick="runSolve()" style="margin-bottom:8px">Solve best XI</button>
+  <details class="hlp" style="margin-bottom:10px"><summary>Advanced &mdash; solver settings</summary>
+    <div style="margin-top:8px">
+      <label style="font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;display:block">Rating Ceiling &mdash; <span id="ratingCeilLabel" style="color:var(--ink);font-weight:800">95</span></label>
+      <input type="range" id="ratingCeilSlider" min="0" max="19" value="10" style="width:100%;margin:0 0 4px;accent-color:var(--cyan)" oninput="updateRatingCeilLabel()">
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--mut);margin-bottom:8px"><span>85 &mdash; min</span><span>95 &mdash; default</span><span>104 &mdash; max</span></div>
+      <p class="tiny" style="margin:0">The highest team rating the solver considers possible. <b>Lower = faster but may silently skip the optimal XI if your cards are high-rated. Higher = safer but slower.</b> Default (95) is correct for almost every draft.</p>
+      <div id="ratingCeilWarn" style="display:none;font-size:11px;color:var(--warn);background:var(--panel2);border-left:2px solid var(--warn);padding:7px 10px;border-radius:0 7px 7px 0;margin-top:8px">&#9888; Below default &mdash; the solver may miss the best XI if any card is high enough to push the team rating above <span id="ratingCeilWarnVal">99</span>. Only lower this if searches are crashing or too slow.</div>
+      <div style="margin-top:14px">
+        <label style="font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;display:block">Pre-sort order</label>
+        <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:6px">
+          <label style="font-size:12px;display:flex;align-items:flex-start;gap:7px;cursor:pointer"><input type="radio" name="sortMode" value="A" style="margin-top:2px"><span><b>A &mdash; Pure eval</b> &mdash; type + rarity + rating only, no board context. Fastest.</span></label>
+          <label style="font-size:12px;display:flex;align-items:flex-start;gap:7px;cursor:pointer"><input type="radio" name="sortMode" value="B" checked style="margin-top:2px"><span><b>B &mdash; Clash-aware</b> (default) &mdash; pure eval + clash &amp; saturation penalties against your current holds.</span></label>
+          <label style="font-size:12px;display:flex;align-items:flex-start;gap:7px;cursor:pointer"><input type="radio" name="sortMode" value="C" style="margin-top:2px"><span><b>C &mdash; Mini-solve</b> &mdash; runs a quick 1M-node solve first, then sorts against the projected XI. Slightly slower to start.</span></label>
+          <label style="font-size:12px;display:flex;align-items:flex-start;gap:7px;cursor:pointer"><input type="radio" name="sortMode" value="D" style="margin-top:2px" onchange="updateSortModeUI()"><span><b>D &mdash; Recursive</b> &mdash; iteratively re-sorts against each mini-solve&rsquo;s projected XI until stable or passes exhausted, then runs the real solve.</span></label>
+        </div>
+        <div id="sortModeDPanel" style="display:none;margin-top:8px;padding:8px 10px;background:var(--panel2);border-radius:7px">
+          <label style="font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;display:block">Max passes &mdash; <span id="sortPassesLabel" style="color:var(--ink);font-weight:800">3</span></label>
+          <input type="range" id="sortPassesSlider" min="1" max="10" value="3" style="width:100%;margin:0 0 4px;accent-color:var(--cyan)" oninput="document.getElementById('sortPassesLabel').textContent=this.value">
+          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--mut)"><span>1</span><span>3 &mdash; default</span><span>10</span></div>
+          <p class="tiny" style="margin-top:6px;margin-bottom:0">Each pass runs a 1M-node mini-solve and re-sorts. Stops early if the projected XI doesn&rsquo;t change between passes. More passes = more startup time but tighter ordering for complex boards.</p>
+        </div>
+        <p class="tiny" style="margin-top:8px;margin-bottom:0">Controls which signal the solver uses to order candidates before searching. B is the best general choice; try C or D if you have a large complex board and don&rsquo;t mind a brief extra pause.</p>
+      </div>
+    </div>
+  </details>
   <div id="solveOut"></div>
 
   <div class="panel" id="mgrPanel" style="display:none">
@@ -290,10 +314,9 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
 <!-- ===================== HELPER ===================== -->
 <div class="view" id="v-help">
 <div class="wrap">
-  <div class="note">These weights drive the <b>in-pick helper</b> &mdash; the take / hold hints that appear inside each slot as you fill the board. Higher = the judge prefers it more. The squad toggle and the two &ldquo;squad mode&rdquo; weights only bite once you&rsquo;ve started filling the board.</div>
+  <div class="note">These weights drive the <b>in-pick helper</b> &mdash; the take / hold hints that appear inside each slot as you fill the board. Higher = the judge prefers it more. Squad-awareness (clash &amp; position awareness) is always on for the live helper. The two &ldquo;squad mode&rdquo; weights only bite once you&rsquo;ve started filling the board.</div>
   <div class="panel">
     <h2>Helper weights</h2>
-    <label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--ink);margin:4px 0 8px"><input type="checkbox" id="hSquad" checked> Factor in my current board &amp; formation (clash &amp; position awareness)</label>
     <label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--ink);margin:4px 0 8px"><input type="checkbox" id="hNoHold"> No-hold drafting &mdash; always recommend TAKE the top option (never suggest a hold)</label>
     <p class="tiny" style="margin:0 0 6px">Bump the things you care about; reset any time.</p>
     <div id="hwGrid"></div>
@@ -306,8 +329,8 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
     </details>
   </div>
   <div class="panel">
-    <details class="hlp"><summary>Manual board judge (optional)</summary>
-    <p class="tiny" style="margin:6px 0">The in-pick helper already judges automatically as you fill a slot. This standalone judge is here if you want to weigh options without touching the board.</p>
+    <details class="hlp"><summary>Pure card evaluator (no board context)</summary>
+    <p class="tiny" style="margin:6px 0">Scores cards in isolation using only the weights above &mdash; no board, no clash penalties, no formation context. Useful for comparing raw card value before a draft or away from the board.</p>
     <div class="combo" style="margin-bottom:7px"><input type="text" id="h-label" placeholder="Type a name, or 'name rating' e.g. Van Dijk 90" autocomplete="off"><div class="combolist" id="h-label-list"></div></div>
     <div class="seg" id="hTypeSeg">
       <button class="on" data-t="normal">Normal</button>
@@ -327,9 +350,17 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
       <button class="btn gho sm" id="helpCancelBtn" onclick="cancelHelpEdit()" style="display:none;flex:0 0 auto">Cancel edit</button>
     </div>
     <div id="helpList" style="margin-top:10px"></div>
-    <button class="btn" style="margin-top:8px" onclick="judgeBoard()">Judge board</button>
+    <button class="btn" style="margin-top:8px" onclick="judgeBoard()">Evaluate cards</button>
     <button class="btn gho sm" style="margin-top:8px" onclick="clearHelp()">Clear</button>
     <div id="helpOut" style="margin-top:10px"></div>
+    </details>
+  </div>
+
+  <div class="panel">
+    <details class="hlp"><summary>Formation weights</summary>
+      <div id="fwGrid" style="margin-top:6px"></div>
+      <button class="btn gho sm" style="margin-top:8px" onclick="resetFW()">Reset to defaults</button>
+      <span class="tiny" style="margin-left:8px;color:var(--mut)">Tap &plusmn; to flip the sign &mdash; LB/RB are negative by default so 3-back always wins</span>
     </details>
   </div>
 </div>
@@ -445,8 +476,17 @@ const POSALL=["GK","LB","CB","RB","CDM","CM","LM","RM","CAM","LW","RW","ST"];
 // formation slot value: you only get a card's PRIMARY position, and on the starting XI you can't use alt positions.
 // CDM great (Caicedo/Xhaka-tier picks) > CAM/CB/ST good > CM/LW/RW meh > LM/RM weak > LB/RB bad. GK is its own unique slot.
 const PW={CDM:5,CAM:4,CB:4,ST:4,CM:3,LW:3,RW:3,GK:3,LM:2,RM:2,LB:1,RB:1};
-// captain helper uses the INVERSE: a position with bad fill choices (LB/RB) is a GOOD card to grab, if nation/league/club are good too.
-const POSSCARCE={LB:4,RB:4,LM:3,RM:3,GK:3,CM:2,LW:2,RW:2,CAM:1,CB:1,ST:1,CDM:0};
+// Positional scarcity is now derived from the live DB via posScarceN() — see helpValue().
+
+// Formation position weights — drive the "Best fit" ranking in the Formation tab.
+// Hard-coded philosophy: CDM is the gold standard (deepest 82+ pool, most impactful pick).
+// LB/RB are negative by default so 3-back formations always outscore 4/5-back.
+// GK is excluded — every formation has exactly 1 so it never affects ranking.
+const FW_DEF={CDM:10,CB:-3,ST:6,CAM:6,CM:6,LW:4,RW:4,LM:3,RM:3,LB:-10,RB:-10};
+let FW={...FW_DEF};
+// Restore any user-saved formation weights immediately so FORMS initial scores use them.
+(function(){try{const r=localStorage.getItem('pacwyn_fw_v1');if(!r)return;const s=JSON.parse(r);if(s&&typeof s==='object')FW={...FW_DEF,...s};}catch(e){}})();
+
 // Prem club rarity in the gold pool (higher = rarer = far more valuable, since you need 7+ distinct clubs).
 function normPos(p){p=p.toUpperCase();if(p==="LWB")return"LB";if(p==="RWB")return"RB";if(p==="LF")return"CAM";if(p==="RF")return"CAM";if(p==="CF")return"CAM";return p;}
 
@@ -479,10 +519,240 @@ const FORMS=[
  ["5-3-2","GK LB CB CB CB RB CM CM CM ST ST"],
  ["5-2-1-2","GK LB CB CB CB RB CM CM CAM ST ST"]
 ].map(f=>{const slots=f[1].split(" ");
-  const score=slots.reduce((a,s)=>a+PW[s],0);
-  const threeBack=(!slots.includes("LB")&&!slots.includes("RB")); // hard top tier in the ranking
+  const score=slots.reduce((a,s)=>a+(FW[s]||0),0); // uses FW (may already be restored from localStorage)
+  const threeBack=(!slots.includes("LB")&&!slots.includes("RB")); // 3-back = no LB/RB
   return {name:f[0],slots,score,threeBack};});
 const FMAX=Math.max(...FORMS.map(f=>f.score)),FMIN=Math.min(...FORMS.map(f=>f.score));
+
+// GOLD_DB: FC 26 rare-gold Premier League players with their PRIMARY position only.
+// Primary pos = the first (leftmost) position on the card in-game — what actually matters
+// for formation slot calculations. Source: EA official ratings page (ea.com/ratings).
+// NOTE: GOLD_DB is kept for potential future use (e.g. rarity-based scoring experiments)
+// but is NOT currently used for formation scoring — that is now driven by FW weights.
+// GOLD_DB: FC 26 rare-gold Premier League players with PRIMARY position and rating.
+// rat = in-game gold card rating. Kept for reference / future features.
+const GOLD_DB=[
+  // Liverpool
+  {n:"Salah",         nat:"Egypt",            club:"Liverpool",       pos:"RM",  rat:93},
+  {n:"Van Dijk",      nat:"Netherlands",      club:"Liverpool",       pos:"CB",  rat:91},
+  {n:"Alisson",       nat:"Brazil",           club:"Liverpool",       pos:"GK",  rat:90},
+  {n:"Wirtz",         nat:"Germany",          club:"Liverpool",       pos:"CAM", rat:89},
+  {n:"Isak",          nat:"Sweden",           club:"Liverpool",       pos:"ST",  rat:88},
+  {n:"Mac Allister",  nat:"Argentina",        club:"Liverpool",       pos:"CM",  rat:87},
+  {n:"Gravenberch",   nat:"Netherlands",      club:"Liverpool",       pos:"CDM", rat:85},
+  {n:"Szoboszlai",    nat:"Hungary",          club:"Liverpool",       pos:"CAM", rat:83},
+  {n:"Gakpo",         nat:"Netherlands",      club:"Liverpool",       pos:"LM",  rat:84},
+  {n:"Konate",        nat:"France",           club:"Liverpool",       pos:"CB",  rat:85},
+  {n:"Mamardashvili", nat:"Georgia",          club:"Liverpool",       pos:"GK",  rat:85},
+  {n:"Frimpong",      nat:"Netherlands",      club:"Liverpool",       pos:"RB",  rat:83},
+  {n:"Kerkez",        nat:"Hungary",          club:"Liverpool",       pos:"LB",  rat:82},
+  {n:"Bradley",       nat:"Northern Ireland", club:"Liverpool",       pos:"RB",  rat:78},
+  {n:"Robertson",     nat:"Scotland",         club:"Liverpool",       pos:"LB",  rat:81},
+  {n:"Gomez",         nat:"England",          club:"Liverpool",       pos:"CB",  rat:79},
+  {n:"Fabinho",       nat:"Brazil",           club:"Liverpool",       pos:"CDM", rat:82},
+  {n:"Ekitike",       nat:"France",           club:"Liverpool",       pos:"CAM", rat:82},
+  // Arsenal
+  {n:"Saka",          nat:"England",          club:"Arsenal",         pos:"RW",  rat:89},
+  {n:"Gabriel",       nat:"Brazil",           club:"Arsenal",         pos:"CB",  rat:87},
+  {n:"Saliba",        nat:"France",           club:"Arsenal",         pos:"CB",  rat:89},
+  {n:"Rice",          nat:"England",          club:"Arsenal",         pos:"CDM", rat:87},
+  {n:"Odegaard",      nat:"Norway",           club:"Arsenal",         pos:"CM",  rat:88},
+  {n:"David Raya",    nat:"Spain",            club:"Arsenal",         pos:"GK",  rat:86},
+  {n:"Gyokeres",      nat:"Sweden",           club:"Arsenal",         pos:"ST",  rat:88},
+  {n:"Madueke",       nat:"England",          club:"Arsenal",         pos:"RW",  rat:82},
+  {n:"Zubimendi",     nat:"Spain",            club:"Arsenal",         pos:"CDM", rat:83},
+  {n:"Timber",        nat:"Netherlands",      club:"Arsenal",         pos:"RB",  rat:84},
+  {n:"Eze",           nat:"England",          club:"Arsenal",         pos:"CAM", rat:83},
+  {n:"Gabriel Martinelli",nat:"Brazil",       club:"Arsenal",         pos:"LW",  rat:84},
+  {n:"Havertz",       nat:"Germany",          club:"Arsenal",         pos:"ST",  rat:84},
+  {n:"Calafiori",     nat:"Italy",            club:"Arsenal",         pos:"LB",  rat:82},
+  {n:"Mikel Merino",  nat:"Spain",            club:"Arsenal",         pos:"CM",  rat:83},
+  {n:"White",         nat:"England",          club:"Arsenal",         pos:"RB",  rat:82},
+  // Man City
+  {n:"Haaland",       nat:"Norway",           club:"Manchester City", pos:"ST",  rat:92},
+  {n:"Rodri",         nat:"Spain",            club:"Manchester City", pos:"CDM", rat:90},
+  {n:"Donnarumma",    nat:"Italy",            club:"Manchester City", pos:"GK",  rat:90},
+  {n:"Reijnders",     nat:"Netherlands",      club:"Manchester City", pos:"CM",  rat:86},
+  {n:"Ruben Dias",    nat:"Portugal",         club:"Manchester City", pos:"CB",  rat:87},
+  {n:"Bernardo Silva",nat:"Portugal",         club:"Manchester City", pos:"CM",  rat:87},
+  {n:"Doku",          nat:"Belgium",          club:"Manchester City", pos:"LW",  rat:84},
+  {n:"Gvardiol",      nat:"Croatia",          club:"Manchester City", pos:"LB",  rat:84},
+  {n:"Foden",         nat:"England",          club:"Manchester City", pos:"RW",  rat:85},
+  {n:"Marmoush",      nat:"Egypt",            club:"Manchester City", pos:"ST",  rat:84},
+  {n:"Cherki",        nat:"France",           club:"Manchester City", pos:"CAM", rat:83},
+  {n:"Savinho",       nat:"Brazil",           club:"Manchester City", pos:"RW",  rat:83},
+  {n:"Ake",           nat:"Netherlands",      club:"Manchester City", pos:"CB",  rat:84},
+  {n:"Kovacic",       nat:"Croatia",          club:"Manchester City", pos:"CM",  rat:82},
+  {n:"Guehi",         nat:"England",          club:"Manchester City", pos:"CB",  rat:83},
+  {n:"Stones",        nat:"England",          club:"Manchester City", pos:"CB",  rat:84},
+  {n:"Lewis",         nat:"England",          club:"Manchester City", pos:"RB",  rat:79},
+  {n:"Ait-Nouri",     nat:"Algeria",          club:"Manchester City", pos:"LB",  rat:80},
+  // Chelsea
+  {n:"Palmer",        nat:"England",          club:"Chelsea",         pos:"CAM", rat:89},
+  {n:"Caicedo",       nat:"Ecuador",          club:"Chelsea",         pos:"CDM", rat:87},
+  {n:"Marc Cucurella",nat:"Spain",            club:"Chelsea",         pos:"LB",  rat:84},
+  {n:"Fernandez",     nat:"Argentina",        club:"Chelsea",         pos:"CM",  rat:84},
+  {n:"James",         nat:"England",          club:"Chelsea",         pos:"RB",  rat:83},
+  {n:"Pedro Neto",    nat:"Portugal",         club:"Chelsea",         pos:"ST",  rat:83},
+  {n:"Gusto",         nat:"France",           club:"Chelsea",         pos:"RB",  rat:82},
+  {n:"Estevao",       nat:"Brazil",           club:"Chelsea",         pos:"RM",  rat:82},
+  {n:"Joao Pedro",    nat:"Brazil",           club:"Chelsea",         pos:"CAM", rat:82},
+  {n:"Colwill",       nat:"England",          club:"Chelsea",         pos:"CB",  rat:82},
+  {n:"Fofana",        nat:"France",           club:"Chelsea",         pos:"CB",  rat:83},
+  {n:"Lavia",         nat:"Belgium",          club:"Chelsea",         pos:"CDM", rat:82},
+  {n:"Garnacho",      nat:"Argentina",        club:"Chelsea",         pos:"LW",  rat:83},
+  // Man Utd
+  {n:"Bruno Fernandes",nat:"Portugal",        club:"Man Utd",         pos:"CAM", rat:87},
+  {n:"Mbeumo",        nat:"Cameroon",         club:"Man Utd",         pos:"RW",  rat:86},
+  {n:"Casemiro",      nat:"Brazil",           club:"Man Utd",         pos:"CDM", rat:80},
+  {n:"Mainoo",        nat:"England",          club:"Man Utd",         pos:"CM",  rat:82},
+  {n:"Amad",          nat:"Ivory Coast",      club:"Man Utd",         pos:"RM",  rat:82},
+  {n:"Martinez",      nat:"Argentina",        club:"Man Utd",         pos:"CB",  rat:86},
+  {n:"Maguire",       nat:"England",          club:"Man Utd",         pos:"CB",  rat:79},
+  {n:"Mazraoui",      nat:"Morocco",          club:"Man Utd",         pos:"RB",  rat:82},
+  {n:"Shaw",          nat:"England",          club:"Man Utd",         pos:"LB",  rat:77},
+  {n:"Diogo Dalot",   nat:"Portugal",         club:"Man Utd",         pos:"RB",  rat:82},
+  {n:"Ugarte",        nat:"Uruguay",          club:"Man Utd",         pos:"CDM", rat:83},
+  {n:"De Ligt",       nat:"Netherlands",      club:"Man Utd",         pos:"CB",  rat:84},
+  {n:"Sesko",         nat:"Slovenia",         club:"Man Utd",         pos:"ST",  rat:84},
+  {n:"Matheus Cunha", nat:"Brazil",           club:"Man Utd",         pos:"CAM", rat:83},
+  {n:"Dorgu",         nat:"Denmark",          club:"Man Utd",         pos:"LW",  rat:82},
+  {n:"Zirkzee",       nat:"Netherlands",      club:"Man Utd",         pos:"CAM", rat:82},
+  // Aston Villa
+  {n:"Martinez",      nat:"Argentina",        club:"Aston Villa",     pos:"GK",  rat:86},
+  {n:"Watkins",       nat:"England",          club:"Aston Villa",     pos:"ST",  rat:85},
+  {n:"Tielemans",     nat:"Belgium",          club:"Aston Villa",     pos:"CM",  rat:83},
+  {n:"Onana",         nat:"Belgium",          club:"Aston Villa",     pos:"CDM", rat:82},
+  {n:"Douglas Luiz",  nat:"Brazil",           club:"Aston Villa",     pos:"CDM", rat:82},
+  {n:"Rogers",        nat:"England",          club:"Aston Villa",     pos:"CAM", rat:82},
+  {n:"McGinn",        nat:"Scotland",         club:"Aston Villa",     pos:"CM",  rat:80},
+  {n:"Konsa",         nat:"England",          club:"Aston Villa",     pos:"CB",  rat:82},
+  {n:"Maatsen",       nat:"Netherlands",      club:"Aston Villa",     pos:"LB",  rat:79},
+  {n:"Cash",          nat:"Poland",           club:"Aston Villa",     pos:"RB",  rat:81},
+  {n:"Digne",         nat:"France",           club:"Aston Villa",     pos:"LB",  rat:79},
+  {n:"Pau Torres",    nat:"Spain",            club:"Aston Villa",     pos:"CB",  rat:84},
+  {n:"Buendia",       nat:"Argentina",        club:"Aston Villa",     pos:"CAM", rat:81},
+  {n:"Sancho",        nat:"England",          club:"Aston Villa",     pos:"LW",  rat:82},
+  // Spurs
+  {n:"Son",           nat:"Korea Republic",   club:"Spurs",           pos:"LW",  rat:87},
+  {n:"Maddison",      nat:"England",          club:"Spurs",           pos:"CM",  rat:84},
+  {n:"Van De Ven",    nat:"Netherlands",      club:"Spurs",           pos:"CB",  rat:85},
+  {n:"Romero",        nat:"Argentina",        club:"Spurs",           pos:"CB",  rat:86},
+  {n:"Simons",        nat:"Netherlands",      club:"Spurs",           pos:"CAM", rat:84},
+  {n:"Bergvall",      nat:"Sweden",           club:"Spurs",           pos:"CM",  rat:81},
+  {n:"Vicario",       nat:"Italy",            club:"Spurs",           pos:"GK",  rat:84},
+  {n:"Pedro Porro",   nat:"Spain",            club:"Spurs",           pos:"RB",  rat:82},
+  {n:"Udogie",        nat:"Italy",            club:"Spurs",           pos:"LB",  rat:80},
+  {n:"Palhinha",      nat:"Portugal",         club:"Spurs",           pos:"CDM", rat:83},
+  {n:"Kulusevski",    nat:"Sweden",           club:"Spurs",           pos:"CM",  rat:84},
+  {n:"Gallagher",     nat:"England",          club:"Spurs",           pos:"CM",  rat:81},
+  {n:"Kudus",         nat:"Ghana",            club:"Spurs",           pos:"RW",  rat:82},
+  {n:"Solanke",       nat:"England",          club:"Spurs",           pos:"ST",  rat:82},
+  {n:"Odobert",       nat:"France",           club:"Spurs",           pos:"LW",  rat:80},
+  // Newcastle
+  {n:"Isak",          nat:"Sweden",           club:"Newcastle Utd",   pos:"ST",  rat:88},
+  {n:"Tonali",        nat:"Italy",            club:"Newcastle Utd",   pos:"CDM", rat:86},
+  {n:"Bruno Guimaraes",nat:"Brazil",          club:"Newcastle Utd",   pos:"CM",  rat:87},
+  {n:"Gordon",        nat:"England",          club:"Newcastle Utd",   pos:"LW",  rat:85},
+  {n:"Botman",        nat:"Netherlands",      club:"Newcastle Utd",   pos:"CB",  rat:83},
+  {n:"Trippier",      nat:"England",          club:"Newcastle Utd",   pos:"RB",  rat:83},
+  {n:"Livramento",    nat:"England",          club:"Newcastle Utd",   pos:"RB",  rat:80},
+  {n:"Hall",          nat:"England",          club:"Newcastle Utd",   pos:"LB",  rat:76},
+  {n:"Schar",         nat:"Switzerland",      club:"Newcastle Utd",   pos:"CB",  rat:82},
+  {n:"Elanga",        nat:"Sweden",           club:"Newcastle Utd",   pos:"RW",  rat:82},
+  {n:"Joelinton",     nat:"Brazil",           club:"Newcastle Utd",   pos:"CM",  rat:82},
+  {n:"Burn",          nat:"England",          club:"Newcastle Utd",   pos:"CB",  rat:79},
+  {n:"Woltemade",     nat:"Germany",          club:"Newcastle Utd",   pos:"ST",  rat:82},
+  {n:"Wissa",         nat:"DR Congo",         club:"Newcastle Utd",   pos:"ST",  rat:82},
+  // West Ham
+  {n:"Bowen",         nat:"England",          club:"West Ham",        pos:"RW",  rat:82},
+  {n:"Wan-Bissaka",   nat:"DR Congo",         club:"West Ham",        pos:"RB",  rat:79},
+  {n:"Lucas Paqueta", nat:"Brazil",           club:"West Ham",        pos:"CM",  rat:84},
+  {n:"Soucek",        nat:"Czech Republic",   club:"West Ham",        pos:"CDM", rat:80},
+  {n:"Summerville",   nat:"Netherlands",      club:"West Ham",        pos:"LW",  rat:82},
+  {n:"Wilson",        nat:"England",          club:"West Ham",        pos:"ST",  rat:80},
+  {n:"Castellanos",   nat:"Argentina",        club:"West Ham",        pos:"ST",  rat:80},
+  {n:"Walker-Peters", nat:"England",          club:"West Ham",        pos:"RB",  rat:79},
+  // Everton
+  {n:"Pickford",      nat:"England",          club:"Everton",         pos:"GK",  rat:82},
+  {n:"Ndiaye",        nat:"Senegal",          club:"Everton",         pos:"LM",  rat:79},
+  {n:"Gueye",         nat:"Senegal",          club:"Everton",         pos:"CM",  rat:78},
+  {n:"Branthwaite",   nat:"England",          club:"Everton",         pos:"CB",  rat:82},
+  {n:"Coleman",       nat:"Republic of Ireland",club:"Everton",       pos:"RB",  rat:78},
+  {n:"Dewsbury-Hall", nat:"England",          club:"Everton",         pos:"CM",  rat:79},
+  {n:"Garner",        nat:"England",          club:"Everton",         pos:"CDM", rat:78},
+  {n:"Grealish",      nat:"England",          club:"Everton",         pos:"LW",  rat:80},
+  // Brighton
+  {n:"Mitoma",        nat:"Japan",            club:"Brighton",        pos:"LM",  rat:82},
+  {n:"Ayari",         nat:"Sweden",           club:"Brighton",        pos:"CDM", rat:79},
+  {n:"Baleba",        nat:"Cameroon",         club:"Brighton",        pos:"CDM", rat:79},
+  {n:"Kadioglu",      nat:"Turkey",           club:"Brighton",        pos:"RB",  rat:80},
+  {n:"De Cuyper",     nat:"Belgium",          club:"Brighton",        pos:"LB",  rat:80},
+  {n:"Minteh",        nat:"Gambia",           club:"Brighton",        pos:"RM",  rat:80},
+  {n:"Welbeck",       nat:"England",          club:"Brighton",        pos:"ST",  rat:78},
+  {n:"Van Hecke",     nat:"Netherlands",      club:"Brighton",        pos:"CB",  rat:81},
+  {n:"Verbruggen",    nat:"Netherlands",      club:"Brighton",        pos:"GK",  rat:82},
+  // Nottm Forest
+  {n:"Gibbs-White",   nat:"England",          club:"Nott'm Forest",   pos:"ST",  rat:82},
+  {n:"Sangare",       nat:"Ivory Coast",      club:"Nott'm Forest",   pos:"CDM", rat:80},
+  {n:"Wood",          nat:"New Zealand",      club:"Nott'm Forest",   pos:"ST",  rat:80},
+  {n:"Sels",          nat:"Belgium",          club:"Nott'm Forest",   pos:"GK",  rat:82},
+  {n:"Anderson",      nat:"England",          club:"Nott'm Forest",   pos:"CM",  rat:80},
+  {n:"Ndoye",         nat:"Switzerland",      club:"Nott'm Forest",   pos:"RM",  rat:79},
+  {n:"Murillo",       nat:"Brazil",           club:"Nott'm Forest",   pos:"CB",  rat:82},
+  {n:"Milenkovic",    nat:"Serbia",           club:"Nott'm Forest",   pos:"CB",  rat:82},
+  {n:"Zinchenko",     nat:"Ukraine",          club:"Nott'm Forest",   pos:"CDM", rat:79},
+  {n:"Yates",         nat:"England",          club:"Nott'm Forest",   pos:"CM",  rat:78},
+  // Fulham
+  {n:"Robinson",      nat:"United States",    club:"Fulham",          pos:"LM",  rat:78},
+  {n:"Jimenez",       nat:"Mexico",           club:"Fulham",          pos:"ST",  rat:80},
+  {n:"Wilson",        nat:"Wales",            club:"Fulham",          pos:"RW",  rat:80},
+  {n:"Chukwueze",     nat:"Nigeria",          club:"Fulham",          pos:"RW",  rat:80},
+  {n:"Iwobi",         nat:"Nigeria",          club:"Fulham",          pos:"LW",  rat:80},
+  {n:"Berge",         nat:"Norway",           club:"Fulham",          pos:"CM",  rat:81},
+  {n:"Andersen",      nat:"Denmark",          club:"Fulham",          pos:"CB",  rat:82},
+  {n:"Bassey",        nat:"Nigeria",          club:"Fulham",          pos:"CB",  rat:80},
+  // Bournemouth
+  {n:"Adams",         nat:"United States",    club:"AFC Bournemouth", pos:"CM",  rat:79},
+  {n:"Kluivert",      nat:"Netherlands",      club:"AFC Bournemouth", pos:"LM",  rat:79},
+  {n:"Rayan",         nat:"Brazil",           club:"AFC Bournemouth", pos:"ST",  rat:80},
+  {n:"Semenyo",       nat:"Ghana",            club:"AFC Bournemouth", pos:"RW",  rat:80},
+  {n:"Christie",      nat:"Scotland",         club:"AFC Bournemouth", pos:"CM",  rat:79},
+  {n:"Senesi",        nat:"Argentina",        club:"AFC Bournemouth", pos:"CB",  rat:80},
+  {n:"Scott",         nat:"England",          club:"AFC Bournemouth", pos:"CM",  rat:79},
+  // Crystal Palace
+  {n:"Eze",           nat:"England",          club:"Crystal Palace",  pos:"CAM", rat:82},
+  {n:"Wharton",       nat:"England",          club:"Crystal Palace",  pos:"CM",  rat:82},
+  {n:"Guehi",         nat:"England",          club:"Crystal Palace",  pos:"CB",  rat:82},
+  {n:"Mateta",        nat:"France",           club:"Crystal Palace",  pos:"ST",  rat:82},
+  {n:"Larsen",        nat:"Denmark",          club:"Crystal Palace",  pos:"ST",  rat:80},
+  {n:"Henderson",     nat:"England",          club:"Crystal Palace",  pos:"GK",  rat:80},
+  {n:"Munoz",         nat:"Colombia",         club:"Crystal Palace",  pos:"RM",  rat:82},
+  {n:"Lacroix",       nat:"France",           club:"Crystal Palace",  pos:"CB",  rat:80},
+  {n:"Yeremy Pino",   nat:"Spain",            club:"Crystal Palace",  pos:"RW",  rat:80},
+  {n:"Mitchell",      nat:"England",          club:"Crystal Palace",  pos:"LM",  rat:77},
+  // Brentford
+  {n:"Igor Thiago",   nat:"Brazil",           club:"Brentford",       pos:"ST",  rat:82},
+  {n:"Damsgaard",     nat:"Denmark",          club:"Brentford",       pos:"LW",  rat:80},
+  {n:"Van Den Berg",  nat:"Netherlands",      club:"Brentford",       pos:"RB",  rat:80},
+  {n:"Schade",        nat:"Germany",          club:"Brentford",       pos:"ST",  rat:80},
+  {n:"Henderson",     nat:"England",          club:"Brentford",       pos:"CM",  rat:79},
+  {n:"Collins",       nat:"Republic of Ireland",club:"Brentford",     pos:"CB",  rat:80},
+  // Sunderland (new Prem club in FC26)
+  {n:"Xhaka",         nat:"Switzerland",      club:"Sunderland",      pos:"CDM", rat:85},
+  {n:"Alderete",      nat:"Paraguay",         club:"Sunderland",      pos:"CB",  rat:80},
+  {n:"Geertruida",    nat:"Netherlands",      club:"Sunderland",      pos:"RB",  rat:82},
+  {n:"Ballard",       nat:"Northern Ireland", club:"Sunderland",      pos:"CB",  rat:77},
+  {n:"Brobbey",       nat:"Netherlands",      club:"Sunderland",      pos:"ST",  rat:82},
+  // Wolves
+  {n:"Joao Gomes",    nat:"Brazil",           club:"Wolves",          pos:"CDM", rat:82},
+  {n:"Hwang Hee Chan",nat:"Korea Republic",   club:"Wolves",          pos:"LW",  rat:80},
+  {n:"Krejci",        nat:"Czech Republic",   club:"Wolves",          pos:"CDM", rat:79},
+  // Leeds (newly promoted)
+  {n:"Gnonto",        nat:"Italy",            club:"Leeds United",    pos:"RW",  rat:79},
+  {n:"Calvert-Lewin", nat:"England",          club:"Leeds United",    pos:"ST",  rat:80},
+  {n:"Aaronson",      nat:"United States",    club:"Leeds United",    pos:"CM",  rat:78},
+];
 
 /* ============================ STATE ============================ */
 let cards=[],managers=[],helpCards=[],chosenForm=null,uid=1,lastSolve=null,playerDB=[];
@@ -495,11 +765,11 @@ let _solveCache=null,_squadOverride=null,_urgentPos=null,_pendFactor=1; // Phase
 let _lastFullRedundant=false; // set by squadAdjust; read by XI-boost phase to suppress boost for commit-clashing cards
 let _evalingSiblings=false; // recursion guard: prevents sibling helpValue calls from triggering further sibling evals
 let NAT_RANK={},LG_RANK={},NAT_COUNT={},CLB_COUNT={},LG_COUNT={},DB_M=1; // raw card counts per nation/club/hero-league + total, from the live DB
-const SHAPE_DEF={clashDraws:23,iconKeep:0.30,iconErosion:0.10,heroFull:3,heroPenalty:0.22,normalFloor:0.45,normalSlope:0.08,clashBase:0.6,clashStack:0.50,holdSizeBase:0.30,holdDomBoost:0.40,redundancySurcharge:0.6,iconRarityRefundCap:0.6,takeThreshold:5,premHeroRatingThreshold:96,premHeroRatingGap:2,premHeroWaiverLow:0.50,premHeroWaiverHigh:0.20,premHeroPosWaiver:0.40,commonNatCount:10,commonClubCount:3,commonNatPenalty:0.25,commonClubPenalty:0.25,commonHeroLeaguePenalty:0,commonHeroLeagueCount:0,lowIconRatingThreshold:90};
+const SHAPE_DEF={clashDraws:23,iconKeep:0.30,iconErosion:0.10,heroFull:3,heroPenalty:0.22,normalFloor:0.45,normalSlope:5,clashBase:0.6,clashStack:0.50,holdSizeBase:0.30,holdDomBoost:0.40,redundancySurcharge:0.6,iconRarityRefundCap:0.6,takeThreshold:5,premHeroRatingThreshold:96,premHeroRatingGap:2,premHeroPenaltyFracLow:1,premHeroPenaltyFracHigh:1,premHeroPenaltyFracUrgentPos:0.40,commonNatCount:10,commonClubCount:3,commonNatPenalty:0.25,commonClubPenalty:0.25,commonHeroLeaguePenalty:0,commonHeroLeagueCount:0,lowIconPenaltyMin:0.25,lowIconPenaltyMax:0.75,dominantClashGap:5,outOfFormationPenalty:10};
 // Inputs floored at 0 because a negative value here would flip the formula's intent (e.g. extra icons/heroes
 // getting MORE valuable instead of less). clashBase also gets a max: above 2 a mild clash can end up scoring
 // worse than a severe one (see clashBase's label below), so 2 is the point past which the slider works against itself.
-const SHAPE_BOUNDS={clashDraws:[1,100],iconKeep:[0,1],heroFull:[0,10],normalFloor:[0,1],takeThreshold:[0,20],clashBase:[0,2],clashStack:[0,2],holdSizeBase:[0,1],holdDomBoost:[0,1],heroPenalty:[0,2],normalSlope:[0,1],iconErosion:[0,1],iconRarityRefundCap:[0,1],redundancySurcharge:[0,2],premHeroRatingThreshold:[80,105],premHeroRatingGap:[1,10],premHeroWaiverLow:[0,1],premHeroWaiverHigh:[0,1],premHeroPosWaiver:[0,1],commonNatCount:[0,30],commonClubCount:[0,20],commonNatPenalty:[0,1],commonClubPenalty:[0,1],commonHeroLeaguePenalty:[0,1],commonHeroLeagueCount:[0,30],lowIconRatingThreshold:[60,100]};
+const SHAPE_BOUNDS={clashDraws:[1,100],iconKeep:[0,1],heroFull:[0,10],normalFloor:[0,1],takeThreshold:[0,20],clashBase:[0,2],clashStack:[0,2],holdSizeBase:[0,1],holdDomBoost:[0,1],heroPenalty:[0,2],normalSlope:[0.1,20],iconErosion:[0,1],iconRarityRefundCap:[0,1],redundancySurcharge:[0,2],premHeroRatingThreshold:[80,105],premHeroRatingGap:[1,10],premHeroPenaltyFracLow:[0,1],premHeroPenaltyFracHigh:[0,1],premHeroPenaltyFracUrgentPos:[0,1],commonNatCount:[0,30],commonClubCount:[0,20],commonNatPenalty:[0,1],commonClubPenalty:[0,1],commonHeroLeaguePenalty:[0,1],commonHeroLeagueCount:[0,30],lowIconPenaltyMin:[0,1],lowIconPenaltyMax:[0,2],dominantClashGap:[0,30],outOfFormationPenalty:[0,50]};
 let SHAPE={...SHAPE_DEF}; // tunable: clash-draw count (rarity = P(no clash over this many random draws)) + icon/hero diminishing
 const _SHAPE_SAVE_KEY='pacwyn_shape_v1';
 function saveShapeLocal(){try{localStorage.setItem(_SHAPE_SAVE_KEY,JSON.stringify(SHAPE));}catch(e){}}
@@ -937,9 +1207,8 @@ function addMgrToDB(){
 function fSlots(slots){const o={};slots.forEach(s=>o[s]=(o[s]||0)+1);
   return Object.entries(o).map(([k,v])=>v>1?v+'\u00d7'+k:k).join(' ');}
 
-// Compare score: raw slot score + 3-back bonus guaranteeing 3-back always wins.
-// Min 3-back raw = 35, max 4/5-back raw = 39; +10 makes min 3-back = 45 > 39.
-function compareScore(f){return f.score+(f.threeBack?10:0);}
+// Compare score: uses f.score, which is driven by FW position weights (see Formation Weights in the Weights tab).
+function compareScore(f){return f.score;}
 
 function fcardHTML(f,lo,hi){
   const pct=hi>lo?Math.round((f.score-lo)/(hi-lo)*100):100;
@@ -982,13 +1251,9 @@ function renderForms(mode){
     const lo=Math.min(...l.map(f=>f.score)),hi=Math.max(...l.map(f=>f.score));
     grid.innerHTML=l.map(f=>fcardHTML(f,lo,hi)).join('');return;
   }
-  const threes=filtered.filter(f=>f.threeBack).sort((a,b)=>b.score-a.score||a.name.localeCompare(b.name));
-  const rest=filtered.filter(f=>!f.threeBack).sort((a,b)=>b.score-a.score||a.name.localeCompare(b.name));
-  const tlo=Math.min(...threes.map(f=>f.score)),thi=Math.max(...threes.map(f=>f.score));
-  const rlo=Math.min(...rest.map(f=>f.score)),rhi=Math.max(...rest.map(f=>f.score));
-  let html='';
-  if(threes.length)html+=ghead('3 at the back \u00b7 always strongest')+threes.map(f=>fcardHTML(f,tlo,thi)).join('');
-  if(rest.length)html+=(threes.length?ghead('4 &amp; 5 at the back'):'')+rest.map(f=>fcardHTML(f,rlo,rhi)).join('');
+  const sorted=[...filtered].sort((a,b)=>b.score-a.score||a.name.localeCompare(b.name));
+  const lo=Math.min(...sorted.map(f=>f.score)),hi=Math.max(...sorted.map(f=>f.score));
+  let html=sorted.map(f=>fcardHTML(f,lo,hi)).join('');
   grid.innerHTML=html;
   if(!q&&!_compareMode&&chosenForm==='Custom')grid.innerHTML+=ghead('your custom shape')+fcardHTML(FORMS.find(f=>f.name==='Custom'),0,1);
 }
@@ -1134,7 +1399,7 @@ function updateSolveForm(){
 // Defer initial formation render until DOM is fully parsed — Safari can execute
 // inline scripts before the elements below them exist in the document.
 if(document.readyState==='loading'){
-  document.addEventListener('DOMContentLoaded',()=>sortForm('rank'));
+  document.addEventListener('DOMContentLoaded',()=>{sortForm('rank');updateRatingCeilLabel();updateSortModeUI();});
 }else{
   sortForm('rank');
 }
@@ -1164,7 +1429,7 @@ function confirmFormation(){
   const f=FORMS.find(x=>x.name===chosenForm);
   if(!f){alert('Pick a formation above first.');return;}
   if(board&&cards.length&&!confirm('Build a fresh board for '+f.name+'? This clears your current board and all picks.'))return;
-  buildBoard(f);renderCards();saveLocal();
+  managers=[];buildBoard(f);renderCards();renderMgr();$('#solveOut').innerHTML='';$('#mgrOut').innerHTML='';$('#mgrPanel').style.display='none';saveLocal();
   document.querySelector('.tabbar button[data-v="v-cards"]').click();
 }
 /* ---- slot editor ---- */
@@ -1185,7 +1450,7 @@ function renderSlotEditor(){
   $('#capCancelBtn').style.display=isCap?'block':'none';
   $('#slotTitle').textContent=isCap?'Captain':s.label+(s.kind==='pos'?' (starting)':'');
   if(isCap){
-    $('#slotNote').innerHTML='Your first pick. Add this board\u2019s options \u2014 the helper rates them \u2014 then tap \u2605 to make one your captain (you\u2019ll choose which position he fills). Always committed, never benched.';
+    $('#slotNote').innerHTML='Your first pick. Add the options you\u2019re offered \u2014 the helper rates them \u2014 then tap \u2605 to commit one as captain (you\u2019ll choose which position). <b>Always TAKE</b> \u2014 the captain slot cannot be held or skipped. (Skipping the entire board is fine; but if you\u2019re picking, you must commit one now.)';
   }else{
     const st=slotState(s);
     $('#slotNote').innerHTML=st==='bust'?'Marked <b>busted</b> \u2014 ignored by the solver. Add a player to un-bust.':
@@ -1412,9 +1677,11 @@ function scoreXI(xi){
 }
 
 /* ============================ SOLVER (DFS + bound) ============================ */
-function solveBest(form,cards,nodeCap){
+function solveBest(form,cards,nodeCap,ratingCeil){
+  const RC=ratingCeil!==undefined?ratingCeil:99;
   const slots=form.slots;
-  const cand=slots.map(s=>cards.filter(c=>c.pos.includes(s)));
+  const cand=slots.map(s=>cards.filter(c=>c.pos.includes(s))
+    .sort((a,b)=>b.rating-a.rating)); // v5.1: best-first — high-rated candidates tried first so the first complete path is near-optimal, making pruning bite much earlier on capped searches
   if(cand.some(l=>l.length===0))
     return {error:'A slot has no eligible card: '+slots.filter((s,i)=>cand[i].length===0).join(', ')};
   const order=slots.map((s,i)=>i).sort((a,b)=>cand[a].length-cand[b].length);
@@ -1440,7 +1707,7 @@ function solveBest(form,cards,nodeCap){
       const partialHasHero=partial.some(c=>c.type==='hero')?1:0;
       const iconBonus=partialHasIcon||Math.min(1,remaining);
       const heroBonus=partialHasHero||Math.min(1,remaining);
-      const ub=99+33
+      const ub=RC+33
         +(new Set(partial.map(c=>c.nation)).size+remaining)
         +(new Set(partial.map(leagueOf)).size+remaining)
         +(new Set(partial.filter(c=>c.type==='normal').map(c=>c.club)).size+iconBonus+heroBonus+remaining);
@@ -1554,6 +1821,20 @@ function _hideSolverOverlay(){
   if(ov)ov.style.display='none';
   if(bd)bd.style.display='none';
 }
+
+// Solver runs synchronously on the main thread (no Worker — avoids iOS stall between solve steps).
+function getRatingCeil(){const el=$('#ratingCeilSlider');return el?85+parseInt(el.value):95;}
+function updateSortModeUI(){
+  const el=document.getElementById('sortModeDPanel');
+  if(el){const checked=document.querySelector('input[name="sortMode"]:checked');el.style.display=(checked&&checked.value==='D')?'block':'none';}
+}
+function updateRatingCeilLabel(){
+  const el=$('#ratingCeilSlider');if(!el)return;
+  const v=parseInt(el.value),ceil=85+v;
+  const lbl=$('#ratingCeilLabel');if(lbl)lbl.textContent=ceil;
+  const warn=$('#ratingCeilWarn');if(warn)warn.style.display=v<10?'block':'none';
+  const warnVal=$('#ratingCeilWarnVal');if(warnVal)warnVal.textContent=ceil;
+}
 function runSolve(nodeCap){
   syncAllSlots();
   const out=$('#solveOut');
@@ -1562,12 +1843,44 @@ function runSolve(nodeCap){
   const cap=nodeCap||3000000;
   _showSolverOverlay();
   out.innerHTML='<div class="note" style="color:var(--mut)">\u23f3 Solving\u2026'+(cap>3000000?' (extended search \u2014 '+Math.round(cap/1000000)+'M node cap)':'')+'</div>';
-  setTimeout(()=>_runSolveInner(cap),30);
+  setTimeout(()=>_runSolveInner(cap,getRatingCeil()),30);
 }
-function _runSolveInner(cap){
+function _runSolveInner(cap,ratingCeil){
   const out=$('#solveOut');
-  const form=FORMS.find(f=>f.name===chosenForm),t0=performance.now(),r=solveBest(form,cards,cap),ms=Math.round(performance.now()-t0);
+  const form=FORMS.find(f=>f.name===chosenForm),t0=performance.now();
+  // Pre-sort cards by helpValue descending. Mode is user-selectable in solver settings:
+  //   A = pure eval (no board context), B = clash-aware (default), C = 1M mini-solve, D = recursive passes
+  const _sortMode=(()=>{const el=document.querySelector('input[name="sortMode"]:checked');return el?el.value:'B';})();
+  const _savedForceSquad=_forceSquad,_savedSquadOverride=_squadOverride;
+  if(_sortMode==='A'){
+    _forceSquad=false;
+  } else if(_sortMode==='C'){
+    _forceSquad=true;
+    const _miniCtx=solveContext(1000000);
+    _squadOverride=(_miniCtx&&_miniCtx.ok&&_miniCtx.xis&&_miniCtx.xis[0])?_miniCtx.xis[0].xi:null;
+  } else if(_sortMode==='D'){
+    _forceSquad=true;
+    const _maxPasses=parseInt((document.getElementById('sortPassesSlider')||{value:'3'}).value)||3;
+    let _prevXIKey='';
+    for(let _pass=0;_pass<_maxPasses;_pass++){
+      const _miniCtx=solveContext(1000000);
+      const _xi=(_miniCtx&&_miniCtx.ok&&_miniCtx.xis&&_miniCtx.xis[0])?_miniCtx.xis[0].xi:null;
+      _squadOverride=_xi;
+      // Build a stable key from the XI card ids to detect convergence
+      const _xiKey=_xi?_xi.map(c=>c.id).sort().join(','):'';
+      if(_xiKey&&_xiKey===_prevXIKey)break; // XI didn't change — order has converged, stop early
+      _prevXIKey=_xiKey;
+      // Invalidate the solve cache so the next pass re-solves with the new order
+      _solveCache=null;
+    }
+  } // B: leave _forceSquad and _squadOverride as-is
+  const sortedCards=cards.slice().sort((a,b)=>helpValue(b)-helpValue(a));
+  _forceSquad=_savedForceSquad;_squadOverride=_savedSquadOverride;
+  const r=solveBest(form,sortedCards,cap,ratingCeil),ms=Math.round(performance.now()-t0);
   _hideSolverOverlay();
+  _handleSolveResult(r,cap,form,ms,out);
+}
+function _handleSolveResult(r,cap,form,ms,out){
   if(r.error&&!/no eligible card/.test(r.error)){out.innerHTML='<div class="note" style="border-color:var(--bad)">'+r.error+'</div>';return}
   if(r.error||!r.bestXIs.length){const em=completeOOP(form);
     let rows='';
@@ -1589,6 +1902,23 @@ function _runSolveInner(cap){
       const emSc=Object.assign({},em.sc,{chem:em.chem,total:em.sc.rating+em.chem+em.sc.nations+em.sc.leagues+em.sc.clubs});
       // oopIds: set of card ids that are OOP placeholders — pickMgr uses this to score subs correctly.
       const oopIds=new Set(em.pick.filter((_,i)=>em.oop[i]).map(c=>c&&c.id));
+      // Build pick-per-hold exactly like renderSummary does
+      const ord=id=>board?board.findIndex(s=>s.id===id):0;
+      const lblOf=id=>{const s=board&&board.find(x=>x.id===id);return s?s.label:id;};
+      const holdPicks={};em.pick.filter(Boolean).forEach(c=>{if(c.hold)holdPicks[c.hold]=c.label;});
+      const hpEntries=Object.entries(holdPicks).sort((a,b)=>ord(a[0])-ord(b[0]));
+      const hp=hpEntries.length?hpEntries.map(([h,l])=>'<span class="kv"><span>'+esc(lblOf(h))+'</span><b>'+esc(l)+'</b></span>').join(''):'<span class="tiny">none</span>';
+      const usedGroups=new Set(em.pick.filter(Boolean).map(c=>c.hold||('C'+c.id)));
+      const holdGroups={};cards.forEach(c=>{if(c.hold)(holdGroups[c.hold]=holdGroups[c.hold]||[]).push(c);});
+      const subPicks=[];
+      Object.entries(holdGroups).sort((a,b)=>ord(a[0])-ord(b[0])).forEach(([h,list])=>{
+        if(usedGroups.has(h))return;
+        let bestC=list[0],bestV=-1;
+        list.forEach(c=>{let v=c.rating/100;if(!emSc.nationSet.has(c.nation))v+=2;if(!emSc.leagueSet.has(leagueOf(c)))v+=2;if(c.type==='normal'&&!emSc.clubSet.has(c.club))v+=1;if(v>bestV){bestV=v;bestC=c;}});
+        subPicks.push({h,label:bestC.label});
+      });
+      const pickPerHold='<div class="panel"><h2>Pick per hold</h2>'+hp+'<div class="tiny" style="margin-top:6px">In hold order. Committed cards need no pick.</div>'+(subPicks.length?'<div class="tiny" style="margin:8px 0 4px;color:var(--mut)">The rest won\u2019t start \u2014 pick these for sub / manager-insurance value:</div>'+subPicks.map(s=>'<span class="kv"><span>'+esc(lblOf(s.h))+'</span><b>'+esc(s.label)+'</b></span>').join(''):'')+'</div>';
+      out.innerHTML=head+'<div class="panel"><h2>Emergency fill</h2><div class="xi">'+rows+'</div></div>'+score+pickPerHold;
       window._solved={main:{sc:emSc,xi:em.pick.filter(Boolean)},form,oopIds};window._bench=cards.filter(c=>!c.hold&&!usedIds.has(c.id)).map(c=>({c,why:''}));$('#mgrPanel').style.display='block';}else{$('#mgrPanel').style.display='none';}
     return;}
   // capped: show best-so-far with option to keep searching at 3x the cap
@@ -1784,7 +2114,8 @@ function pickMgr(){
   $('#mgrOut').innerHTML='<div class="summary" style="margin-bottom:0"><div class="bigrow"><div class="tot">'+plan.total+'<small>BEST WITH MANAGER (+'+plan.gain+')</small></div>'
     +'<div class="rc"><div><div class="b" style="color:var(--good)">+'+plan.gain+'</div><div class="l">MGR</div></div></div></div>'
     +'<div class="xirow"><div class="sl">MGR</div><div class="pl"><b>'+esc(m.name||m.nation)+'</b><div class="m">'+m.nation+' \u00b7 '+(m.league==='Icons'?'Icon':m.league.replace('England ',''))+'</div></div>'
-    +'<div class="r">'+(plan.gain?'+'+plan.gain:'\u2014')+'</div></div>'+tail+'</div>';
+    +'<div class="r">'+(plan.gain?'+'+plan.gain:'\u2014')+'</div></div>'+tail+'</div>'
+    +'<div class="note">&#9888; Don\u2019t forget \u2014 go fill out your starting XI in-game to match this solution. It\u2019s easy to skip since the manager pick comes right after your last board pick.</div>';
 }
 
 /* ============================ HELPER (board judge) ============================ */
@@ -1851,10 +2182,26 @@ function _rankCommon(map){const e=Object.entries(map).sort((a,b)=>b[1]-a[1]);con
 // measures, so it's objective: common nations crater (England ~0.01), the steep zone sits where it really is (raw ~80->20),
 // and genuinely-rare nations cluster near 1 (Ukraine 0.91 ~ Trinidad 0.99). Same formula for nation / club / hero-league.
 function rebuildRarity(){const src=playerDB.length?playerDB:DEFAULT_DB;
-  DB_M=src.length||1;NAT_COUNT={};CLB_COUNT={};LG_COUNT={};
+  DB_M=src.length||1;NAT_COUNT={};CLB_COUNT={};LG_COUNT={};POS_COUNT={};
   src.forEach(c=>{NAT_COUNT[c.nation]=(NAT_COUNT[c.nation]||0)+1;
     if(c.type==='normal'&&c.club)CLB_COUNT[c.club]=(CLB_COUNT[c.club]||0)+1;
-    if(c.type==='hero')LG_COUNT[c.league]=(LG_COUNT[c.league]||0)+1;});}
+    if(c.type==='hero')LG_COUNT[c.league]=(LG_COUNT[c.league]||0)+1;
+    (c.pos||[]).forEach(p=>{POS_COUNT[p]=(POS_COUNT[p]||0)+1;});});
+  recomputeFormScores(); // rescore formations from FW weights (DB no longer used for this)
+}
+// Rescore every formation using FW position weights.
+// (GOLD_DB is kept in case we want rarity-based scoring in the future, but it is NOT
+// used for scoring here — the simpler weight approach is more predictable and tunable.)
+// Score = sum of FW[slot] for all 11 slots, stored as a per-slot average for display.
+function recomputeFormScores(){
+  FORMS.forEach(f=>{
+    if(f.name==='Custom')return;
+    const total=f.slots.reduce((s,p)=>s+(FW[p]||0),0);
+    f.score=Math.round(total/f.slots.length*100)/100;
+  });
+  const grid=document.getElementById('fgrid');
+  if(grid)try{sortForm(grid.dataset.m||'rank');}catch(e){}
+}
 // Derive sorted lists of most-common nations/clubs/hero-leagues from the live DB counts.
 // Called lazily in isCommonNat/Clb/Lg so changes to SHAPE params take effect immediately.
 function _sortedByCount(map){return Object.entries(map).sort((a,b)=>b[1]-a[1]).map(([k])=>k);}
@@ -1865,25 +2212,54 @@ function _clashRarity(raw){return Math.pow(1-Math.min(0.999,(raw||0)/DB_M),SHAPE
 function rarityNat(n){return _clashRarity(NAT_COUNT[n]||0);} // unseen nation -> rarest
 function rarityLg(l){return _clashRarity(LG_COUNT[l]||0);}
 function clubRare(club){return _clashRarity(CLB_COUNT[club]===undefined?14:CLB_COUNT[club]);} // 0..1, Prem clubs with fewer cards = rarer pick
-function posScarceN(p){return (POSSCARCE[p]!==undefined?POSSCARCE[p]:0)/4;} // 0..1
+function posScarceN(p){
+  // Linear scarcity from live DB: rarest position (fewest cards) → 1, most common → 0.
+  const entries=Object.entries(POS_COUNT||{});if(!entries.length)return 0;
+  const counts=entries.map(([,v])=>v);
+  const maxC=Math.max(...counts),minC=Math.min(...counts);
+  if(maxC===minC)return 0;
+  const c=(POS_COUNT[p]||0); // position not in DB at all → count 0 → rarest
+  return Math.max(0,Math.min(1,1-(c-minC)/(maxC-minC)));
+}
 function ratingN(r){return Math.max(0,Math.min(1,(Math.max(75,Math.min(99,r))-75)/24));} // 75->0, 99->1, clamped
 /* tunable weights for the helper */
-const HW_DEF={icon:12,hero:10,normalBase:6,nation:2.0,heroLeague:1.5,clubRarity:2.5,rating:1.0,posScarce:0.5,posFlex:0.3,clashAvoid:1.0,posNeed:0.7,premHeroPenalty:6.5,lowIconPenalty:0.25};
-const HW_LABEL={icon:'Icon (card type)',hero:'Hero (card type)',normalBase:'Normal (card type)',nation:'Nation rarity',heroLeague:'Hero-league rarity',clubRarity:'Prem club rarity',rating:'Rating',posScarce:'Scarce position',posFlex:'Position flexibility',clashAvoid:'Avoid clashes — squad mode',posNeed:'Fill needed positions — squad mode',premHeroPenalty:'Prem-hero penalty — extra cost for a Prem-league hero (waived at elite ratings or urgent positional need; thresholds in Advanced)',lowIconPenalty:'Low-rated icon penalty — fraction of icon base lost for icons below the rating threshold (set in Advanced; 0 disables)'};
+const HW_DEF={icon:12,hero:10,normalBase:6,nation:2.0,heroLeague:1.5,clubRarity:2.5,rating:1.0,posScarce:1.0,posFlex:0.5,clashAvoid:1.0,posNeed:0,premHeroPenalty:6.5,lowIconRatingThreshold:90};
+const HW_LABEL={icon:'Icon (card type)',hero:'Hero (card type)',normalBase:'Normal (card type)',nation:'Nation rarity',heroLeague:'Hero-league rarity',clubRarity:'Prem club rarity',rating:'Rating',posScarce:'Scarce position',posFlex:'Position flexibility',clashAvoid:'Avoid clashes — squad mode',posNeed:'Fill needed positions — squad mode',premHeroPenalty:'Prem-hero penalty',lowIconRatingThreshold:'Low-rated icon penalty — below this rating'};
 let HW={...HW_DEF};
 function renderWeights(){const el=$('#hwGrid');if(!el)return;
-  el.innerHTML=Object.keys(HW_DEF).map(k=>'<div style="display:flex;justify-content:space-between;align-items:center;padding:2px 0"><span style="font-size:11px;color:var(--mut)">'+HW_LABEL[k]+'</span>'
-    +'<input type="number" step="0.01" id="hw-'+k+'" value="'+HW[k]+'" style="width:78px;font-size:12px" oninput="var _r=parseFloat(this.value);if(!isNaN(_r)){HW[this.id.slice(3)]=_r;_solveCache=null;}" onchange="var _r=parseFloat(this.value);if(isNaN(_r))return;_r=Math.max(0,_r);var _k=this.id.slice(3);if(_k===\'lowIconPenalty\')_r=Math.min(1,_r);HW[_k]=_r;this.value=_r;_solveCache=null;"></div>').join('');}
+  el.innerHTML=Object.keys(HW_DEF).map(k=>{const isThresh=(k==='lowIconRatingThreshold');const step=isThresh?'1':'0.01';return'<div style="display:flex;justify-content:space-between;align-items:center;padding:2px 0"><span style="font-size:11px;color:var(--mut)">'+HW_LABEL[k]+'</span>'
+    +'<input type="number" step="'+step+'" id="hw-'+k+'" value="'+HW[k]+'" style="width:78px;font-size:12px" oninput="var _r=parseFloat(this.value);if(!isNaN(_r)){HW[this.id.slice(3)]=_r;_solveCache=null;}" onchange="var _r=parseFloat(this.value);if(isNaN(_r))return;_r=Math.max(0,_r);var _k=this.id.slice(3);if(_k===\'lowIconRatingThreshold\'){_r=Math.min(100,Math.round(_r));}HW[_k]=_r;this.value=_r;_solveCache=null;"></div>';}).join('');}
 function resetWeights(){HW={...HW_DEF};renderWeights();_solveCache=null;}
 renderWeights();
+
+/* ============================ FORMATION WEIGHTS ============================ */
+const FW_LABEL={ST:'ST',LW:'LW',RW:'RW',CAM:'CAM',CM:'CM',LM:'LM',RM:'RM',CDM:'CDM',CB:'CB',LB:'LB',RB:'RB'};
+const FW_ORDER=['ST','LW','RW','CAM','CM','LM','RM','CDM','CB','LB','RB'];
+function saveFW(){try{localStorage.setItem('pacwyn_fw_v1',JSON.stringify(FW));}catch(e){}}
+function renderFW(){
+  const el=$('#fwGrid');if(!el)return;
+  el.innerHTML=FW_ORDER.map(k=>'<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0">'
+    +'<span style="font-size:11px;color:var(--mut)">'+FW_LABEL[k]+'</span>'
+    +'<span style="display:flex;align-items:center;gap:3px">'
+    +'<button style="background:var(--panel2);border:1px solid var(--line);border-radius:5px;color:var(--mut);font-size:13px;padding:3px 8px;line-height:1;cursor:pointer;flex-shrink:0" '
+    +'onclick="var v=parseFloat(document.getElementById(\'fw-'+k+'\').value)||0;v=-v;FW[\''+k+'\']=v;document.getElementById(\'fw-'+k+'\').value=v;recomputeFormScores();saveFW();">&plusmn;</button>'
+    +'<input type="text" inputmode="decimal" id="fw-'+k+'" value="'+FW[k]+'" style="width:58px;font-size:12px"'
+    +' oninput="var _r=parseFloat(this.value);if(!isNaN(_r)){FW[\''+k+'\']=_r;recomputeFormScores();saveFW();}"'
+    +' onchange="var _r=parseFloat(this.value);if(isNaN(_r))return;FW[\''+k+'\']=_r;this.value=_r;recomputeFormScores();saveFW();">'
+    +'</span>'
+    +'</div>').join('');
+  recomputeFormScores();
+}
+function resetFW(){FW={...FW_DEF};renderFW();saveFW();}
+renderFW();
 const SHAPE_LABEL={
   clashDraws:'Clash draws — how many random picks to model for rarity (default 23 ≈ a full draft). Higher = rarer nations/clubs score more; lower = gentler on common ones.',
   iconKeep:'2nd-icon value kept — fraction of the icon base weight that survives once you already have one icon (default 0.30 = 30%). There is a built-in runtime floor of 12 % so a 2nd icon can never be valued at literally nothing.',
   iconErosion:'Icon erosion per extra — how fast the residual drops for each additional icon beyond the first (default 0.10). Raise to penalise 3rd/4th icons faster.',
   heroFull:'Heroes before diminishing — how many heroes are considered free additions before the penalty kicks in (default 3). Each hero brings a distinct league, so the first few are almost always good.',
   heroPenalty:'Hero penalty slope — how steeply value falls per hero past the threshold above (default 0.22). There is a built-in floor: an extra hero always keeps at least 20 % of its base value no matter how high this goes.',
-  normalFloor:'Normal-card glue floor — minimum multiplier applied to normals once you already have 8+ distinct committed Prem clubs (default 0.45). Prevents late normals from being written off entirely.',
-  normalSlope:'Normal-card glue slope — how fast the multiplier falls per extra committed Prem club past the 8-club threshold (default 0.08). Each hold group counts as one club.',
+  normalFloor:'Normal-card glue floor — minimum multiplier on the normal base weight as glue saturates (default 0.45). The curve asymptotes toward this at very high club counts — late normals are penalised but never written off entirely.',
+  normalSlope:'Normal-card glue steepness — the number of clubs above 7 at which the penalty is halfway to the floor (default 5, so halfway at 12 clubs). Lower = punishes saturation sooner; higher = more forgiving deeper into the squad. Each hold group counts as one club, choosing whichever card adds the freshest.',
   clashBase:'Clash penalty base — fixed portion of the penalty applied whenever a card clashes an existing nation/club/league (default 0.6). Raising it makes mild clashes (held cards) feel closer to full-commit clashes. Capped at 2 — above that a mild clash can score worse than a severe one.',
   clashStack:'Multi-clash stacking — how much steeper the penalty gets for each additional card already held in the same nation/club/league (default 0.50). The runtime multiplier is capped at ×2.0.',
   holdSizeBase:'Hold-size severity boost — how much the base hold-clash severity rises for a 1-card hold (near-certain to field). A 5-card hold adds nothing; a 1-card hold adds this full amount (default 0.30). Total severity is capped at the same level as a committed-card clash.',
@@ -1891,27 +2267,30 @@ const SHAPE_LABEL={
   redundancySurcharge:'Full-redundancy surcharge — extra penalty when a card clashes on every dimension it has: nation + league for heroes, nation + club for normals, nation only for icons. Stacks on top of the per-dimension penalties.',
   iconRarityRefundCap:'Rare-nation refund cap — when evaluating a 2nd icon, how much of the icon penalty a sufficiently rare nation can cancel (default 0.6 = up to 60 % back). The effective ceiling is around 0.9 — values above that behave the same.',
   takeThreshold:'Take vs hold gap — how much better the top option must score before the helper calls TAKE instead of HOLD (default 5). Lower = quicker to recommend taking; higher = holds more boards for end-solve.',
-  premHeroRatingThreshold:'Prem-hero rating waiver threshold — rating at which the first penalty waiver kicks in (default 96). Cards at this rating use the low waiver; cards this many + gap points above use the high waiver.',
-  premHeroRatingGap:'Prem-hero rating waiver gap — how many points above the threshold triggers the stronger waiver (default 2, so 98+ at defaults).',
-  premHeroWaiverLow:'Prem-hero low waiver — fraction of the penalty that survives at the threshold rating (default 0.50 = half penalty). 1 = no waiver; 0 = full forgiveness.',
-  premHeroWaiverHigh:'Prem-hero high waiver — fraction of the penalty that survives at the elite rating tier (default 0.20 = 80 % off). Should be lower than the low waiver.',
-  premHeroPosWaiver:'Prem-hero position waiver — fraction of the penalty that survives when the card fills an urgent positional gap (default 0.40). Lower = more forgiving for positional emergencies.',
+  premHeroRatingThreshold:'Prem-hero rating threshold — below this rating the full penalty always applies (default 96). Above it, the penalty can ease depending on the fraction settings below. Has no effect unless at least one of those fractions is set below 1.0.',
+  premHeroRatingGap:'Prem-hero rating gap — how many points above the threshold it takes for the ceiling fraction to fully apply (default 2). The penalty fraction ramps smoothly from the low setting to the high setting across this range. Has no effect unless the two fractions differ.',
+  premHeroPenaltyFracLow:'Prem-hero penalty fraction at threshold — how much of the full penalty survives at exactly the threshold rating (1.0 = full penalty, 0 = completely forgiven). Default 1.0 = rating never softens the penalty. Lower this to start easing high-rated Prem heroes.',
+  premHeroPenaltyFracHigh:'Prem-hero penalty fraction at ceiling — fraction of the full penalty that survives at threshold + gap and above (1.0 = still full penalty, 0 = fully forgiven at elite ratings). Set lower than the threshold fraction to create a smooth ramp-down over elite ratings. Default 1.0.',
+  premHeroPenaltyFracUrgentPos:'Prem-hero urgent-position penalty fraction — fraction of the full penalty kept when the card directly fills a critical positional gap in your formation (0.40 = 40% retained, so a big discount for genuine positional need). 0 = free pass, 1 = no discount at all. Default 0.40.',
   commonNatCount:'Common-nation count — how many top nations (by DB card count) to penalise as overrepresented (default 10, roughly France/England/Brazil…). 0 disables. Affects icons, heroes, and normals.',
   commonClubCount:'Common-club count — how many top Prem clubs (by card count) to penalise (default 3, typically Man City/Arsenal/Liverpool). 0 disables. Normals only.',
   commonHeroLeagueCount:'Common hero-league count — how many top hero leagues (by card count) to penalise (default 0 = off). Increase to discourage clustering on the most common hero leagues.',
   commonNatPenalty:'Common-nation penalty — fraction of the card’s base type weight lost when its nation is in the common list (default 0.25). Example: icon base 12 loses 3 pts.',
   commonClubPenalty:'Common-club penalty — fraction of the normal base weight lost when the card’s Prem club is in the common list (default 0.25). Normals only.',
   commonHeroLeaguePenalty:'Common hero-league penalty — fraction of hero base weight lost when the card is a hero in a common hero league (default 0 = off).',
-  lowIconRatingThreshold:'Low-rated icon threshold — icons strictly below this rating get the low-rated icon penalty applied (see main Weights panel). Default 90. The penalty is flat and applies even to your first icon — the free icon slot is best used on a strong card.'
+  lowIconPenaltyMin:'Low-rated icon min penalty — fraction of icon base value lost when an icon is exactly at the threshold rating (default 0.25 = 25%). Penalty scales up exponentially toward the max as rating drops toward 85.',
+  lowIconPenaltyMax:'Low-rated icon max penalty — maximum fraction of icon base value lost, applied at rating 85 and below (default 0.75 = 75%). Must be ≥ the min. The curve from min to max is exponential — it steepens fast near the floor.',
+  dominantClashGap:'Dominant-clash rating gap — the rating lead over every clash rival at which clash penalties are halved (default 5). Smaller = more forgiving sooner; larger = only very dominant cards get relief. Asymptotes to zero penalty at large leads — a card 20+ pts ahead of all its rivals on every clashed dimension is treated as effectively clash-free.',
+  outOfFormationPenalty:'Out-of-formation penalty — points subtracted when a card\'s positions have zero overlap with the active formation (default 10). Only fires when squad-awareness is on and a formation is set. Set to 0 to disable.',
 };
 function renderShape(){const el=$('#shapeGrid');if(!el)return;
-  el.innerHTML=Object.keys(SHAPE_DEF).map(k=>{const dec=['iconKeep','iconErosion','heroPenalty','normalFloor','normalSlope','clashBase','clashStack','holdSizeBase','holdDomBoost','redundancySurcharge','iconRarityRefundCap','takeThreshold','premHeroWaiverLow','premHeroWaiverHigh','premHeroPosWaiver','commonNatPenalty','commonClubPenalty','commonHeroLeaguePenalty'];const step=dec.includes(k)?'0.01':'1';return'<div style="display:flex;justify-content:space-between;align-items:center;padding:2px 0"><span style="font-size:11px;color:var(--mut)">'+SHAPE_LABEL[k]+'</span>'+'<input type="number" step="'+step+'" id="shp-'+k+'" value="'+SHAPE[k]+'" style="width:78px;font-size:12px"'
+  el.innerHTML=Object.keys(SHAPE_DEF).map(k=>{const dec=['iconKeep','iconErosion','heroPenalty','normalFloor','normalSlope','clashBase','clashStack','holdSizeBase','holdDomBoost','redundancySurcharge','iconRarityRefundCap','takeThreshold','premHeroPenaltyFracLow','premHeroPenaltyFracHigh','premHeroPenaltyFracUrgentPos','commonNatPenalty','commonClubPenalty','commonHeroLeaguePenalty','lowIconPenaltyMin','lowIconPenaltyMax'];const step=dec.includes(k)?'0.01':'1';return'<div style="display:flex;justify-content:space-between;align-items:center;padding:2px 0"><span style="font-size:11px;color:var(--mut)">'+SHAPE_LABEL[k]+'</span>'+'<input type="number" step="'+step+'" id="shp-'+k+'" value="'+SHAPE[k]+'" style="width:78px;font-size:12px"'
     +' oninput="var _raw=parseFloat(this.value);if(!isNaN(_raw)){SHAPE[\''+k+'\']=_raw;_solveCache=null;}"'
     +' onchange="var _raw=parseFloat(this.value);if(isNaN(_raw))return;var _b=SHAPE_BOUNDS[\''+k+'\'];if(_b){if(_b[0]!==null&&_raw<_b[0]){_raw=_b[0];}if(_b[1]!==null&&_raw>_b[1]){_raw=_b[1];}}SHAPE[\''+k+'\']=_raw;this.value=_raw;_solveCache=null;saveShapeLocal();"'
     +'></div>';}).join('');}
 function resetShape(){SHAPE={...SHAPE_DEF};renderShape();_solveCache=null;saveShapeLocal();}
 renderShape();
-function squadAwareOn(){if(_forceSquad)return true;const el=$('#hSquad');return!!(el&&el.checked);}
+function squadAwareOn(){return _forceSquad;}
 function noHoldOn(){const el=$('#hNoHold');return!!(el&&el.checked);}
 function squadInfo(){ // summarise the squad: type counts (holds weigh half), per nation/league/club the best rating + commit flags.
   // When _squadOverride is set (the solve's projected XI), use that as the base — but ALSO fold in
@@ -1981,37 +2360,86 @@ function squadAdjust(c){
       adj-=pen;                                                // worse/equal nation (Pele behind Yorke) -> full collapse
     }
   }
-  else if(c.type==='hero'){const over=Math.max(0,info.heroes-SHAPE.heroFull);const m=Math.max(0.2,1-SHAPE.heroPenalty*over);adj-=HW.hero*(1-m);
-    // Prem heroes clash the Prem league slot AND bring no league-link value in a Prem squad —
-    // apply a dedicated surcharge, partially waived for elite ratings or urgent positional need.
-    if(c.league==='England Premier League'&&HW.premHeroPenalty>0){
-      let pen=HW.premHeroPenalty;
-      // high-rating waiver: at threshold = low waiver multiplier, at threshold+gap = high waiver multiplier
-      const thr=SHAPE.premHeroRatingThreshold||96;
-      const gap=SHAPE.premHeroRatingGap||2;
-      if(c.rating>=thr+gap)pen*=Math.max(0,Math.min(1,SHAPE.premHeroWaiverHigh));
-      else if(c.rating>=thr)pen*=Math.max(0,Math.min(1,SHAPE.premHeroWaiverLow));
-      // urgent position need waiver: only fraction of the penalty survives when filling a critical gap
-      if(_urgentPos&&c.pos&&c.pos.some(p=>_urgentPos.has(p)))pen*=Math.max(0,Math.min(1,SHAPE.premHeroPosWaiver));
-      adj-=pen;
+  else if(c.type==='hero'){
+    // Saturation only applies to non-Prem heroes, and only counts distinct leagues —
+    // hold groups contribute at most one league (the freshest), so a 4-card hold of
+    // LaLiga heroes counts as one distinct league, not four. Prem heroes are exempt
+    // from this curve entirely; they're handled exclusively by premHeroPenalty in helpValue.
+    if(c.league!=='England Premier League'){
+      const src2=_squadOverride||cards;
+      const heroLgGroups=new Map();
+      src2.forEach(x=>{
+        if(_judgeExclude&&x.slot===_judgeExclude)return;
+        if(x.type!=='hero'||x.league==='England Premier League')return;
+        const g=x.hold||('C'+x.id);
+        if(!heroLgGroups.has(g))heroLgGroups.set(g,new Set());
+        heroLgGroups.get(g).add(x.league);
+      });
+      const hGrps=[...heroLgGroups.values()].map(s=>[...s]).sort((a,b)=>a.length-b.length);
+      const seenLgs=new Set();
+      hGrps.forEach(lgs=>{const fresh=lgs.find(l=>!seenLgs.has(l))||lgs[0];seenLgs.add(fresh);});
+      const distinctHeroLeagues=seenLgs.size;
+      const over=Math.max(0,distinctHeroLeagues-SHAPE.heroFull);
+      const m=Math.max(0.2,1-SHAPE.heroPenalty*over);
+      adj-=HW.hero*(1-m);
     }
   } // heroes add DISTINCT leagues, so useful up to ~3; degrade after (gentler than icons)
   else{
-    // Glue saturation: only kicks in when 8 distinct Prem clubs are already committed.
-    // Count one club per hold group (a hold group fields exactly one card) from committed normals only —
-    // icons don't occupy a Prem club slot so they never count toward the 8-club chem threshold.
+    // Glue saturation: free below 7 distinct Prem clubs, exponential decay above.
+    // Optimal club count: greedy — for each hold group pick whichever card adds a fresh club,
+    // so a hold with Arsenal/Man City where Arsenal is already counted contributes Man City instead.
+    // Icons don't occupy a Prem club slot and are excluded.
     const src2=_squadOverride||cards;
-    const seenGlueGroups=new Set(),glueClubs=new Set();
+    // Group normal cards by hold group (committed cards are their own singleton group).
+    const holdGroups=new Map();
     src2.forEach(x=>{
       if(_judgeExclude&&x.slot===_judgeExclude)return;
-      if(x.type!=='normal')return;
+      if(x.type!=='normal'||!x.club)return;
       const g=x.hold||('C'+x.id);
-      if(seenGlueGroups.has(g))return; // count each hold group once
-      seenGlueGroups.add(g);
-      if(x.club)glueClubs.add(x.club);
+      if(!holdGroups.has(g))holdGroups.set(g,[]);
+      holdGroups.get(g).push(x.club);
+    });
+    // Greedy optimal: sort groups by number of distinct clubs they offer (most flexible last),
+    // then for each group add whichever club is freshest. This maximises total distinct clubs.
+    const groups=[...holdGroups.values()].map(clubs=>[...new Set(clubs)]);
+    groups.sort((a,b)=>a.length-b.length); // singletons first, mixed holds last
+    const glueClubs=new Set();
+    groups.forEach(clubs=>{
+      const fresh=clubs.find(cl=>!glueClubs.has(cl))||clubs[0];
+      glueClubs.add(fresh);
     });
     const glue=glueClubs.size;
-    const m=glue<8?1:Math.max(SHAPE.normalFloor,1-SHAPE.normalSlope*(glue-8));adj-=HW.normalBase*(1-m);
+    // Exponential decay curve: untouched at 7, 8/9 barely affected, steepens through the teens,
+    // asymptotes to normalFloor. normalSlope = excess clubs at which halfway to floor (default 5 = halfway at 12 clubs).
+    const excess=Math.max(0,glue-7);
+    const k=Math.max(0.1,SHAPE.normalSlope);
+    const m=excess===0?1:Math.max(SHAPE.normalFloor,SHAPE.normalFloor+(1-SHAPE.normalFloor)*(1-excess*excess/(excess*excess+k*k)));
+    adj-=HW.normalBase*(1-m);
+  }
+  // Advanced weight: if a card rates significantly higher than EVERY single rival it clashes
+  // with (nation, and league/club where applicable), its clash penalties below are mitigated
+  // (default: halved) — it's almost certainly the one that'd survive a swap, not the one losing
+  // the slot. Checked once, up front, against the clash maps squadInfo() already built; this can
+  // only ever loosen the clash penalties applied in dim()/the redundancy surcharge below, never
+  // touch anything else. Uses the tightest dimension's gap as a scalar ramp — one very close rival
+  // suppresses mitigation proportionally; a card behind on any rival gets no mitigation at all.
+  let domMult=1;
+  {
+    const rivalBests=[];
+    const natE=info.nat[c.nation];if(natE)rivalBests.push(natE.best);
+    if(c.type==='hero'){const lgE=info.lg[leagueOf(c)];if(lgE)rivalBests.push(lgE.best);}
+    if(c.type==='normal'){const clbE=info.clb[c.club];if(clbE)rivalBests.push(clbE.best);}
+    if(rivalBests.length&&SHAPE.dominantClashGap>0){
+      // Curve where dominantClashGap is the lead at which exactly half the mitigation applies.
+      // Uses minGap²/(minGap²+gap²) — at lead=gap gives 0.5, asymptotes toward 1 at large leads.
+      // A card 20+ pts ahead of all rivals on every clashed dimension gets near-full mitigation.
+      const minGap=Math.min(...rivalBests.map(rb=>c.rating-rb));
+      if(minGap>0){
+        const g=SHAPE.dominantClashGap;
+        const dominanceFraction=minGap*minGap/(minGap*minGap+g*g);
+        domMult=1-dominanceFraction;
+      }
+    }
   }
   let dims=0,clashes=0,sumSev=0,commitClashCount=0;
   function dim(key,map,importance,freshRwd){
@@ -2052,7 +2480,7 @@ function squadAdjust(c){
     // Steeper than before (clashStack default 0.50 vs old hardcoded 0.25), capped at 2.0.
     sev*=Math.min(2.0,1+SHAPE.clashStack*(e.count-1));
     sumSev+=sev;
-    adj-=importance*(SHAPE.clashBase+(2.0-SHAPE.clashBase)*sev)*A;                        // lose the would-be uniqueness AND a penalty
+    adj-=importance*(SHAPE.clashBase+(2.0-SHAPE.clashBase)*sev)*A*domMult;                        // lose the would-be uniqueness AND a penalty
   }
   dim(c.nation,info.nat,HW.nation,0.5);
   if(c.type==='hero')dim(leagueOf(c),info.lg,HW.heroLeague,0.5); // normal+Prem is core chem (never a clash); icons are league-wildcards; a PREM hero clashes Prem here
@@ -2064,18 +2492,22 @@ function squadAdjust(c){
   // can squeeze two of them into the XI; that's an artefact of the temp-hold injection, not real value.
   _lastFullRedundant=false;
   if(clashes===dims&&dims){
-    adj-=typeBase*SHAPE.redundancySurcharge*(sumSev/clashes)*A;
+    adj-=typeBase*SHAPE.redundancySurcharge*(sumSev/clashes)*A*domMult;
     // Fully redundant against commits: every clashed dimension has anyCommit=true.
     // (If it only clashes held cards, it's still penalised but might legitimately upgrade them.)
     if(commitClashCount===clashes)_lastFullRedundant=true;
   }
-  const form=FORMS.find(f=>f.name===chosenForm);
-  if(form&&c.pos&&c.pos.length){
-    const need={};form.slots.forEach(s=>need[s]=(need[s]||0)+1);
-    let gap=0;c.pos.forEach(p=>{if(need[p])gap=Math.max(gap,need[p]-(info.posSupply[p]||0));});
-    if(gap>0)adj+=HW.posNeed*Math.min(1,gap)*(0.4+0.6*Math.min(1,info.total/22));
+  // posNeed: only meaningful once 11+ slots are filled — before that almost everything is "needed"
+  const _filledSlots=board?board.filter(sl=>sl.id!==_judgeExclude&&(slotState(sl)==='committed'||slotState(sl)==='hold')).length:0;
+  if(_filledSlots>=11){
+    const form=FORMS.find(f=>f.name===chosenForm);
+    if(form&&c.pos&&c.pos.length){
+      const need={};form.slots.forEach(s=>need[s]=(need[s]||0)+1);
+      let gap=0;c.pos.forEach(p=>{if(need[p])gap=Math.max(gap,need[p]-(info.posSupply[p]||0));});
+      if(gap>0)adj+=HW.posNeed*Math.min(1,gap)*(0.4+0.6*Math.min(1,info.total/22));
+    }
+    if(_urgentPos&&c.pos&&c.pos.some(p=>_urgentPos.has(p)))adj+=HW.posNeed*2.5*_pendFactor; // a position you currently CANNOT field anywhere — scaled by how few picks remain
   }
-  if(_urgentPos&&c.pos&&c.pos.some(p=>_urgentPos.has(p)))adj+=HW.posNeed*2.5*_pendFactor; // a position you currently CANNOT field anywhere \u2014 scaled by how few picks remain
   return adj;
 }
 function helpValue(c){
@@ -2086,10 +2518,38 @@ function helpValue(c){
   v+=rarityNat(c.nation)*HW.nation;
   v+=ratingN(c.rating)*HW.rating;
   if(c.pos&&c.pos.length){
-    const sc=Math.max(...c.pos.map(posScarceN));
-    v+=sc*HW.posScarce+Math.min(1,(c.pos.length-1)/2)*HW.posFlex;
+    // Formation-gated scarcity: when squad-awareness is on and a formation is active, only
+    // positions that exist in the formation contribute a scarcity boost. For multi-position cards
+    // the rarest in-formation position wins. Cards with zero overlap get a flat penalty
+    // (SHAPE.outOfFormationPenalty) — they can't start, so holding them is actively bad.
+    let sc=0;
+    if(squadAwareOn()&&chosenForm){
+      const form=FORMS.find(f=>f.name===chosenForm);
+      const formSet=form?new Set(form.slots):null;
+      if(formSet){
+        const inForm=c.pos.filter(p=>formSet.has(p));
+        if(inForm.length){sc=Math.max(...inForm.map(posScarceN));}
+        else{v-=SHAPE.outOfFormationPenalty;} // no positions fit this formation — card is useless as a starter
+      }else{sc=Math.max(...c.pos.map(posScarceN));}
+    }else{sc=Math.max(...c.pos.map(posScarceN));}
+    v+=sc*HW.posScarce+(c.pos.length-1)/4*HW.posFlex;
   }
   if(squadAwareOn())v+=squadAdjust(c);
+  // Prem-hero penalty: applied always — not gated on squadAwareOn — because it reflects the
+  // inherent chem cost of a Prem-league hero regardless of board context. This means the pure
+  // card evaluator (squad-awareness off) correctly penalises Prem heroes just as the live helper does.
+  if(c.type==='hero'&&c.league==='England Premier League'&&HW.premHeroPenalty>0){
+    let pen=HW.premHeroPenalty;
+    const thr=SHAPE.premHeroRatingThreshold||96;
+    const gap=SHAPE.premHeroRatingGap||2;
+    if(c.rating>=thr){
+      const t=Math.min(1,(c.rating-thr)/gap); // 0 at threshold, 1 at threshold+gap
+      const penFrac=SHAPE.premHeroPenaltyFracLow+t*t*(SHAPE.premHeroPenaltyFracHigh-SHAPE.premHeroPenaltyFracLow);
+      pen*=Math.max(0,Math.min(1,penFrac));
+    }
+    if(_urgentPos&&c.pos&&c.pos.some(p=>_urgentPos.has(p)))pen*=Math.max(0,Math.min(1,SHAPE.premHeroPenaltyFracUrgentPos));
+    v-=pen;
+  }
   // Common nation/club/hero-league penalty: subtract a fraction of base type value for overrepresented attributes
   if(SHAPE.commonNatPenalty>0&&isCommonNat(c.nation)){
     const base=c.type==='icon'?HW.icon:c.type==='hero'?HW.hero:HW.normalBase;
@@ -2101,11 +2561,20 @@ function helpValue(c){
   if(SHAPE.commonHeroLeaguePenalty>0&&c.type==='hero'&&isCommonHeroLeague(leagueOf(c))){
     v-=HW.hero*SHAPE.commonHeroLeaguePenalty;
   }
-  // Low-rated icon penalty: icons below the threshold lose a fraction of their base value up-front.
-  // Applies regardless of how many icons you already have — even the first icon below the threshold
-  // is penalised, because the free-icon slot is better spent on a strong one.
-  if(HW.lowIconPenalty>0&&c.type==='icon'&&c.rating<SHAPE.lowIconRatingThreshold){
-    v-=HW.icon*HW.lowIconPenalty;
+  // Low-rated icon penalty: icons below the threshold (set in main Weights) lose a fraction of their
+  // base value. The penalty scales exponentially from lowIconPenaltyMin at the threshold down to
+  // lowIconPenaltyMax at rating 85 (both set in Advanced). Applies even to the first icon — the
+  // free icon slot is best spent on a strong card.
+  if(HW.lowIconRatingThreshold>0&&c.type==='icon'&&c.rating<HW.lowIconRatingThreshold){
+    const thr=HW.lowIconRatingThreshold,hardFloor=85;
+    const minPen=Math.max(0,SHAPE.lowIconPenaltyMin||0);
+    const maxPen=Math.max(minPen,SHAPE.lowIconPenaltyMax||0);
+    // t=0 at threshold, t=1 at hardFloor (or below)
+    const t=Math.min(1,Math.max(0,(thr-c.rating)/Math.max(1,thr-hardFloor)));
+    // Exponential interpolation: pen = minPen * (maxPen/minPen)^t
+    // Guard: if minPen is 0, use linear scale to maxPen
+    const pen=minPen<=0?(maxPen*t):(maxPen<=minPen?minPen:minPen*Math.pow(maxPen/minPen,t));
+    if(pen>0)v-=HW.icon*pen;
   }
   return v;
 }
@@ -2122,7 +2591,7 @@ function rankAndVerdict(list,isCap){
   else if(noHoldOn()&&!isCap){verdict='TAKE';detail='No-hold drafting \u2014 take <b>'+esc(cardName(top.c))+'</b>, the strongest option here, and move on. (Toggle off in Weights to let it suggest holds.)'+lowNote;}
   else{const dom=top.v-ranked[1].v>SHAPE.takeThreshold;
     if(dom){verdict='TAKE';detail='<b>'+esc(cardName(top.c))+'</b> is the clear pick \u2014 strongest on type / club / nation / league / fit. Holding any board with 2+ fieldable cards is theoretically a touch better (keeps end-solve freedom), but TAKE is the clean call.'+lowNote;}
-    else{verdict='HOLD';detail='Two or more undominated options \u2014 bank the board and let the end-solve decide which survives the clashes.'+(isCap?' Must pick now? Take <b>'+esc(cardName(top.c))+'</b>.':'')+lowNote;}
+    else{verdict=isCap?'TAKE':'HOLD';detail=isCap?'No single dominant option, but the captain slot is always a commit \u2014 take <b>'+esc(cardName(top.c))+'</b>, the top-rated pick here.'+lowNote:'Two or more undominated options \u2014 bank the board and let the end-solve decide which survives the clashes.'+lowNote;}
   }
   return {ranked,verdict,detail};
 }
@@ -2146,7 +2615,7 @@ function scoreExplain(){
   if(HW.rating>0)parts.push('rating');
   const pos=[];if(HW.posScarce>0)pos.push('scarce');if(HW.posFlex>0)pos.push('versatile');
   if(pos.length)parts.push(pos.join('/')+' positions (only where they apply)');
-  if(typeof squadAwareOn==='function'&&squadAwareOn()){if(HW.clashAvoid>0)parts.push('clash avoidance');if(HW.posNeed>0)parts.push('needed positions');if(HW.premHeroPenalty>0)parts.push('Prem-hero surcharge (waived for elite rating or urgent positional fit)');}
+  if(typeof squadAwareOn==='function'&&squadAwareOn()){if(HW.clashAvoid>0)parts.push('clash avoidance');if(HW.posNeed>0)parts.push('needed positions');if(HW.premHeroPenalty>0)parts.push('Prem-hero penalty (reduced for elite ratings or urgent positional fit if fractions are set below 1.0)');}
   return 'Score = '+parts.join(' + ')+'. Built from your current weights &mdash; a recommendation, you decide.';
 }
 function judgeBoard(){
@@ -2216,7 +2685,7 @@ function solveContext(nodeCap){
   if(missingSlots.length){
     ctx={key,ok:false,xis:[],missing:[...new Set(missingSlots)]};
   }else{
-    const r=solveBest(form,cards,nodeCap||3000000);
+    const r=solveBest(form,cards,nodeCap||3000000,getRatingCeil());
     const _cap=nodeCap||3000000;ctx=(r.error||!r.bestXIs||!r.bestXIs.length)?{key,ok:false,xis:[],missing:[],cap:_cap}:{key,ok:true,xis:r.bestXIs.slice(0,8),missing:[],capped:r.capped,cap:_cap};
   }
   if(!ctx.capped)_solveCache=ctx; // don't cache a capped result — a deeper search from the Solve tab may find better
@@ -2252,7 +2721,7 @@ function runHelperDeep(cap){
     syncAllSlots();
     const missingSlots=greedyGaps(form.slots,cards);
     if(missingSlots.length){_hideSolverOverlay();judgeSlotInline();return;}
-    const r=solveBest(form,cards,nextCap);
+    const r=solveBest(form,cards,nextCap,getRatingCeil());
     _hideSolverOverlay();
     const ctx=(r.error||!r.bestXIs||!r.bestXIs.length)
       ?{key:boardKey(),ok:false,xis:[],missing:[],capped:false,cap:nextCap}
@@ -2280,8 +2749,8 @@ function judgeSlotInline(preCtx){
   // Coverage flags: silent for the first 11 decided picks. From pick 12 onward, check what
   // this board covers (or doesn't) and flag urgency based on how many picks remain total.
   _urgentPos=null;
-  // Count all decided slots: filled (committed/hold) + busted — both are picks the user has made.
-  const _decidedCount=board?board.filter(sl=>sl.busted||slotState(sl)!=='pending').length:0;
+  // Count all decided slots EXCLUDING the current one — we're making this pick, not counting it as done yet.
+  const _decidedCount=board?board.filter(sl=>sl.id!==s.id&&(sl.busted||slotState(sl)!=='pending')).length:0;
   // Total picks in the draft = all non-busted slots (busts decided later don't add picks).
   // We track absolute pick number (decidedCount + 1 = the pick being made now).
   const _pickNumber=_decidedCount+1; // 1-indexed pick number for this board
@@ -2482,7 +2951,7 @@ function judgeSlotInline(preCtx){
   const ctxNote=ctx?(ctx.ok?'<span class="tiny" style="color:var(--mut)"> \u00b7 judged against your projected XI (starters boosted, bench penalised)</span>':'<span class="tiny" style="color:var(--mut)"> \u00b7 early-draft weights (no complete XI yet)</span>'):'';
   let head;
   if(isCap){
-    head='<div class="bigrow"><div class="tot" style="font-size:26px">'+(opts.length>1?verdict:'CAPTAIN')+'</div></div><div class="tiny" style="color:var(--ink)">'+(opts.length>1?detail:'Pick the strongest \u2014 or, since a captain board is skippable, skip it if everything here is weak (see the rating below).')+'</div>';
+    head='<div class="bigrow"><div class="tot" style="font-size:26px">TAKE</div></div><div class="tiny" style="color:var(--ink)">'+(opts.length>1?detail:'Only one option \u2014 commit it as captain. (Skip the whole board if everything here is too weak to justify picking.)')+'</div>';
   }else{
     head=opts.length===1?'<div class="tiny" style="color:var(--ink)">Committed \u2014 its value against the rest of your board'+ctxNote+':</div>'
       :'<div class="bigrow"><div class="tot" style="font-size:26px">'+verdict+'</div></div><div class="tiny" style="color:var(--ink)">'+detail+ctxNote+'</div>';
@@ -2494,7 +2963,8 @@ function judgeSlotInline(preCtx){
     ?'<button class="btn sec sm" style="margin-top:6px" onclick="runHelperDeep('+_helperCap+')">\u23f3 Deeper search ('+Math.round(_helperNextCap/1000000)+'M nodes)</button>'
      +'<div class="tiny" style="color:var(--mut);margin-top:3px">Projected XI found at '+Math.round(_helperCap/1000000)+'M nodes \u2014 deeper search may find a better one and rescore these options.</div>'
     :'';
-  el.innerHTML='<div class="summary" style="margin:6px 0 2px">'+head+projNote+soleNote+urgent+starterNote+'<hr><div class="divh">Helper rating</div>'+rankRows(ranked)+'<button class="btn gho sm" style="margin-top:8px" onclick="runHelper()">\u21bb Re-check</button>'+helperDeepBtn+'</div>';
+  el.innerHTML='<div class="summary" style="margin:6px 0 2px">'+head+projNote+soleNote+urgent+starterNote+'<hr><div class="divh">Helper rating</div>'+rankRows(ranked)+'<button class="btn gho sm" style="margin-top:8px" onclick="runHelper()">\u21bb Re-check</button>'+helperDeepBtn
+    +'<div class="tiny" style="margin-top:8px">Rated against your weights \u2014 feel free to overrule any call you don\u2019t agree with. It\u2019s your draft.</div></div>';
 }
 
 /* ============================ SAVE / LOG / IMPORT ============================ */
@@ -2511,7 +2981,7 @@ function refreshLog(){const el=$('#log');if(el)el.value=JSON.stringify(buildStat
 // for file:// origins (Chrome on Android, some desktop setups). Export is still the
 // guaranteed cross-device backup. A final emergency save fires on beforeunload/pagehide.
 const _SAVE_KEY='pacwyn_state_v3';
-const _APP_VERSION=(document.querySelector('h1 span')||{textContent:''}).textContent.replace(/^v/,'').trim()||'4.6.2';
+const _APP_VERSION=(document.querySelector('h1 span')||{textContent:''}).textContent.replace(/^v/,'').trim()||'4.7';
 function saveLocal(){
   try{const d=JSON.stringify({...buildState(),_v:_APP_VERSION});localStorage.setItem(_SAVE_KEY,d);sessionStorage.setItem(_SAVE_KEY,d);}catch(e){}
 }
