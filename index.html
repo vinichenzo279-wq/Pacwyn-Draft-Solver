@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta property="og:description" content="DraftSolver">
-<title>Draft Solver v4.6.4</title>
+<title>Draft Solver v4.6.5</title>
 <style>
 :root{
   --bg:#05080c; --panel:#0c131b; --panel2:#111c27; --line:#1d2c3a;
@@ -118,7 +118,7 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
 </head>
 <body>
 <header>
-  <h1 class="cap">&#11041; Draft Solver <span style="font-size:11px;opacity:.55;font-weight:400;letter-spacing:0">v4.6.4</span></h1>
+  <h1 class="cap">&#11041; Draft Solver <span style="font-size:11px;opacity:.55;font-weight:400;letter-spacing:0">v4.6.5</span></h1>
   <div class="cap sub">pacwyn draft optimiser</div>
 </header>
 
@@ -495,11 +495,11 @@ let _solveCache=null,_squadOverride=null,_urgentPos=null,_pendFactor=1; // Phase
 let _lastFullRedundant=false; // set by squadAdjust; read by XI-boost phase to suppress boost for commit-clashing cards
 let _evalingSiblings=false; // recursion guard: prevents sibling helpValue calls from triggering further sibling evals
 let NAT_RANK={},LG_RANK={},NAT_COUNT={},CLB_COUNT={},LG_COUNT={},DB_M=1; // raw card counts per nation/club/hero-league + total, from the live DB
-const SHAPE_DEF={clashDraws:23,iconKeep:0.30,iconErosion:0.10,heroFull:3,heroPenalty:0.22,normalFloor:0.45,normalSlope:0.08,clashBase:0.6,clashStack:0.50,holdSizeBase:0.30,holdDomBoost:0.40,redundancySurcharge:0.6,iconRarityRefundCap:0.6,takeThreshold:5,premHeroRatingThreshold:96,premHeroRatingGap:2,premHeroWaiverLow:0.50,premHeroWaiverHigh:0.20,premHeroPosWaiver:0.40,commonNatCount:10,commonClubCount:3,commonNatPenalty:0.25,commonClubPenalty:0.25,commonHeroLeaguePenalty:0,commonHeroLeagueCount:0};
+const SHAPE_DEF={clashDraws:23,iconKeep:0.30,iconErosion:0.10,heroFull:3,heroPenalty:0.22,normalFloor:0.45,normalSlope:0.08,clashBase:0.6,clashStack:0.50,holdSizeBase:0.30,holdDomBoost:0.40,redundancySurcharge:0.6,iconRarityRefundCap:0.6,takeThreshold:5,premHeroRatingThreshold:96,premHeroRatingGap:2,premHeroWaiverLow:0.50,premHeroWaiverHigh:0.20,premHeroPosWaiver:0.40,commonNatCount:10,commonClubCount:3,commonNatPenalty:0.25,commonClubPenalty:0.25,commonHeroLeaguePenalty:0,commonHeroLeagueCount:0,lowIconRatingThreshold:90};
 // Inputs floored at 0 because a negative value here would flip the formula's intent (e.g. extra icons/heroes
 // getting MORE valuable instead of less). clashBase also gets a max: above 2 a mild clash can end up scoring
 // worse than a severe one (see clashBase's label below), so 2 is the point past which the slider works against itself.
-const SHAPE_BOUNDS={clashDraws:[1,100],iconKeep:[0,1],heroFull:[0,null],normalFloor:[0,1],takeThreshold:[0,null],clashBase:[0,2],clashStack:[0,null],holdSizeBase:[0,1],holdDomBoost:[0,1],heroPenalty:[0,null],normalSlope:[0,null],iconErosion:[0,null],iconRarityRefundCap:[0,null],redundancySurcharge:[0,null],premHeroRatingThreshold:[80,105],premHeroRatingGap:[1,10],premHeroWaiverLow:[0,1],premHeroWaiverHigh:[0,1],premHeroPosWaiver:[0,1],commonNatCount:[0,30],commonClubCount:[0,20],commonNatPenalty:[0,1],commonClubPenalty:[0,1],commonHeroLeaguePenalty:[0,1],commonHeroLeagueCount:[0,30]};
+const SHAPE_BOUNDS={clashDraws:[1,100],iconKeep:[0,1],heroFull:[0,10],normalFloor:[0,1],takeThreshold:[0,20],clashBase:[0,2],clashStack:[0,2],holdSizeBase:[0,1],holdDomBoost:[0,1],heroPenalty:[0,2],normalSlope:[0,1],iconErosion:[0,1],iconRarityRefundCap:[0,1],redundancySurcharge:[0,2],premHeroRatingThreshold:[80,105],premHeroRatingGap:[1,10],premHeroWaiverLow:[0,1],premHeroWaiverHigh:[0,1],premHeroPosWaiver:[0,1],commonNatCount:[0,30],commonClubCount:[0,20],commonNatPenalty:[0,1],commonClubPenalty:[0,1],commonHeroLeaguePenalty:[0,1],commonHeroLeagueCount:[0,30],lowIconRatingThreshold:[60,100]};
 let SHAPE={...SHAPE_DEF}; // tunable: clash-draw count (rarity = P(no clash over this many random draws)) + icon/hero diminishing
 const _SHAPE_SAVE_KEY='pacwyn_shape_v1';
 function saveShapeLocal(){try{localStorage.setItem(_SHAPE_SAVE_KEY,JSON.stringify(SHAPE));}catch(e){}}
@@ -1869,47 +1869,48 @@ function clubRare(club){return _clashRarity(CLB_COUNT[club]===undefined?14:CLB_C
 function posScarceN(p){return (POSSCARCE[p]!==undefined?POSSCARCE[p]:0)/4;} // 0..1
 function ratingN(r){return Math.max(0,Math.min(1,(Math.max(75,Math.min(99,r))-75)/24));} // 75->0, 99->1, clamped
 /* tunable weights for the helper */
-const HW_DEF={icon:12,hero:10,normalBase:6,nation:2.0,heroLeague:1.5,clubRarity:2.5,rating:1.0,posScarce:0.5,posFlex:0.3,clashAvoid:1.0,posNeed:0.7,premHeroPenalty:6.5};
-const HW_LABEL={icon:'Icon (card type)',hero:'Hero (card type)',normalBase:'Normal (card type)',nation:'Nation rarity',heroLeague:'Hero-league rarity',clubRarity:'Prem club rarity',rating:'Rating',posScarce:'Scarce position',posFlex:'Position flexibility',clashAvoid:'Avoid clashes — squad mode',posNeed:'Fill needed positions — squad mode',premHeroPenalty:'Prem-hero penalty — extra cost for a hero whose league is Prem (bad in a Prem squad; waived at elite ratings or when filling a critical positional gap — see Advanced for thresholds)'};
+const HW_DEF={icon:12,hero:10,normalBase:6,nation:2.0,heroLeague:1.5,clubRarity:2.5,rating:1.0,posScarce:0.5,posFlex:0.3,clashAvoid:1.0,posNeed:0.7,premHeroPenalty:6.5,lowIconPenalty:0.25};
+const HW_LABEL={icon:'Icon (card type)',hero:'Hero (card type)',normalBase:'Normal (card type)',nation:'Nation rarity',heroLeague:'Hero-league rarity',clubRarity:'Prem club rarity',rating:'Rating',posScarce:'Scarce position',posFlex:'Position flexibility',clashAvoid:'Avoid clashes — squad mode',posNeed:'Fill needed positions — squad mode',premHeroPenalty:'Prem-hero penalty — extra cost for a Prem-league hero (waived at elite ratings or urgent positional need; thresholds in Advanced)',lowIconPenalty:'Low-rated icon penalty — fraction of icon base lost for icons below the rating threshold (set in Advanced; 0 disables)'};
 let HW={...HW_DEF};
 function renderWeights(){const el=$('#hwGrid');if(!el)return;
   el.innerHTML=Object.keys(HW_DEF).map(k=>'<div style="display:flex;justify-content:space-between;align-items:center;padding:2px 0"><span style="font-size:11px;color:var(--mut)">'+HW_LABEL[k]+'</span>'
-    +'<input type="number" step="0.01" id="hw-'+k+'" value="'+HW[k]+'" style="width:78px;font-size:12px" oninput="var _r=parseFloat(this.value);if(!isNaN(_r)){HW[this.id.slice(3)]=_r;_solveCache=null;}"></div>').join('');}
+    +'<input type="number" step="0.01" id="hw-'+k+'" value="'+HW[k]+'" style="width:78px;font-size:12px" oninput="var _r=parseFloat(this.value);if(!isNaN(_r)){HW[this.id.slice(3)]=_r;_solveCache=null;}" onchange="var _r=parseFloat(this.value);if(isNaN(_r))return;_r=Math.max(0,_r);var _k=this.id.slice(3);if(_k===\'lowIconPenalty\')_r=Math.min(1,_r);HW[_k]=_r;this.value=_r;_solveCache=null;"></div>').join('');}
 function resetWeights(){HW={...HW_DEF};renderWeights();_solveCache=null;}
 renderWeights();
 const SHAPE_LABEL={
-  clashDraws:'Clash draws \u2014 how many random picks to model for rarity (default 23 \u2248 a full draft). Higher = rarer nations/clubs score more; lower = gentler on common ones. Affects every rarity number in the helper.',
-  iconKeep:'2nd-icon value kept \u2014 fraction of the Icon base weight that survives once you already have one icon (default 0.30 = 30%). Lower = a second icon is penalised more heavily.',
-  iconErosion:'Icon erosion per extra \u2014 how fast that residual drops for each additional icon beyond the first (default 0.10 per icon). Raise to collapse 3rd/4th icons faster; lower to keep them valuable longer. Floored at 0 \u2014 negative would make extra icons MORE valuable instead of less, the opposite of what this is for.',
-  heroFull:'Heroes before they diminish \u2014 how many heroes the helper considers \u201cfree\u201d additions before the penalty curve kicks in (default 3). Each hero brings a distinct league, so the first few are almost always good.',
-  heroPenalty:'Hero penalty slope \u2014 how steeply value falls for each hero past the threshold above (default 0.22 per hero). Lower = gentler curve; higher = discourages stacking heroes more aggressively, down to a built-in floor (an extra hero always keeps at least 20% of its value \u2014 that floor itself is not adjustable here). Floored at 0 \u2014 negative would reward stacking heroes instead of discouraging it.',
-  normalFloor:'Normal-card glue floor \u2014 the minimum multiplier applied to normal cards once you already have 8+ distinct committed Prem clubs (default 0.45 = 45%). Prevents the 9th and later normals from being written off entirely. Icons never count toward this threshold \u2014 only committed normals do, one per hold group.',
-  normalSlope:'Normal-card glue slope \u2014 how fast the multiplier falls per extra distinct committed Prem club past the 8-club chemistry threshold (default 0.08 per extra club). Each hold group counts as one club regardless of how many cards it contains. Higher = penalises a saturated Prem lineup more. Floored at 0 \u2014 negative would make extra normal cards MORE valuable as you stack them, the opposite of what this is for.',
-  clashBase:'Clash penalty base \u2014 the fixed portion of the penalty applied whenever a card clashes an existing nation/club/league (default 0.6). Raising it brings milder clashes (e.g. a held card) closer to as costly as a fully committed clash; lowering it spreads that gap back out. A full commit-vs-commit clash always costs about the same at the very top of the range no matter where this sits \u2014 the slider mainly reshapes the milder cases below that. Capped 0\u20132: below 0 the penalty would flip into a reward, and above 2 a milder clash can end up costing more than a severe one, which defeats the point.',
-  clashStack:'Multi-clash stacking \u2014 how much steeper the clash penalty gets for each additional card you already hold in the same nation/club/league (default 0.50 per card). With 1 existing card the multiplier is \u00d71.0; with 2 it\u2019s \u00d71.5; with 3 it\u2019s \u00d72.0 (the cap). So a 4th Korean is penalised at full severity cap. Floored at 0 \u2014 negative would reward stacking clashes.',
-  holdSizeBase:'Hold-size severity boost \u2014 how much the base hold clash severity (0.4) rises when a hold group has only 1 card (near-certain to field). A 5-card hold adds nothing; a 1-card hold adds this full amount (default 0.30), putting it at 0.70 severity. Values between reflect the linear scale. Range 0\u20131.',
-  holdDomBoost:'Hold-dominance severity boost \u2014 extra severity added when the best card in a hold group clearly outscores the candidate being judged in the helper\u2019s own eval (default 0.40). A 4-point eval gap gets the full boost; smaller gaps scale linearly (e.g. 2-point gap = half the boost). Because eval already accounts for rarity, clashes, and fit, a 99-rated card that clashes everything can score lower than a 75 with a rare nation \u2014 so this correctly penalises the weaker option even if its rating looks fine. Range 0\u20131.',
-  redundancySurcharge:'Full-redundancy surcharge \u2014 extra penalty applied when a card clashes on every dimension it has: nation + club for normals, nation for icons (default 0.6). This stacks on top of the per-dimension clash penalties above, so a fully redundant card always scores worse than a partially clashing one. Raise to make the helper more dismissive of cards that bring nothing new. Floored at 0 \u2014 negative would reward total redundancy instead of penalising it.',
-  iconRarityRefundCap:'Rare-nation refund cap \u2014 when evaluating a 2nd icon, how much of the base icon penalty a sufficiently rare nation can cancel (default 0.6 = up to 60% back). Values from about 0.9 up to the maximum all behave the same (full refund available), so there is no benefit to pushing it past 0.9 \u2014 0\u20130.9 is the range that actually matters. Floored at 0 \u2014 negative would turn the refund into an extra penalty for rare nations instead.',
-  takeThreshold:'Take vs hold gap \u2014 how much better the top option must score before the helper calls TAKE instead of HOLD (default 5). Lower = quicker to recommend taking; higher = holds more boards for end-solve.',
-  premHeroRatingThreshold:'Prem-hero rating waiver threshold \u2014 rating at which the first waiver tier kicks in (default 96). Cards at or above this rating receive the \u201clow\u201d waiver; cards at threshold + gap receive the \u201chigh\u201d waiver. Range 80\u2013105.',
-  premHeroRatingGap:'Prem-hero rating waiver gap \u2014 how many rating points above the threshold triggers the stronger (high) waiver (default 2, so 98+ at default threshold). Range 1\u201310.',
-  premHeroWaiverLow:'Prem-hero low waiver (penalty multiplier at threshold) \u2014 fraction of the penalty that survives at the threshold rating (default 0.50 = 50% off). Set to 1 to disable this tier; 0 for full forgiveness. Range 0\u20131.',
-  premHeroWaiverHigh:'Prem-hero high waiver (penalty multiplier at threshold+gap) \u2014 fraction of the penalty that survives at the elite rating (default 0.20 = 80% off). Should be lower than the low waiver. Range 0\u20131.',
-  premHeroPosWaiver:'Prem-hero position waiver \u2014 fraction of the Prem-hero penalty that remains when the card fills an urgent position nobody else can cover (default 0.40 = only 40% of the penalty survives). Lower = the helper forgives the Prem-hero pick more readily when it fills a positional gap; raise to stay strict even then. Range 0\u20131.',
-  commonNatCount:'Common-nation count \u2014 how many top nations (by DB card count) to penalise as overrepresented (default 10, ~10 most-stacked nations like France/England/Brazil). 0 disables. Affects icons, heroes, and normals.',
-  commonClubCount:'Common-club count \u2014 how many top Prem clubs (by DB card count) to penalise (default 3, typically Man City/Arsenal/Liverpool). 0 disables. Only applies to normal cards.',
-  commonHeroLeagueCount:'Common hero-league count \u2014 how many top hero leagues (by DB card count) to penalise (default 0 = off). Increase to start penalising hero-heavy leagues.',
-  commonNatPenalty:'Common-nation penalty fraction \u2014 fraction of the card\u2019s base type weight lost when its nation is in the common-nation list (default 0.25 = 25%). Example: icon base 12 loses 3 pts; hero base 10 loses 2.5 pts.',
-  commonClubPenalty:'Common-club penalty fraction \u2014 fraction of the normal-base weight lost when the card\u2019s Prem club is in the common-club list (default 0.25). Only normal cards.',
-  commonHeroLeaguePenalty:'Common hero-league penalty fraction \u2014 fraction of hero-base weight lost when the card is a hero in the common hero-league list (default 0 = off).'
+  clashDraws:'Clash draws — how many random picks to model for rarity (default 23 ≈ a full draft). Higher = rarer nations/clubs score more; lower = gentler on common ones.',
+  iconKeep:'2nd-icon value kept — fraction of the icon base weight that survives once you already have one icon (default 0.30 = 30%). There is a built-in runtime floor of 12 % so a 2nd icon can never be valued at literally nothing.',
+  iconErosion:'Icon erosion per extra — how fast the residual drops for each additional icon beyond the first (default 0.10). Raise to penalise 3rd/4th icons faster.',
+  heroFull:'Heroes before diminishing — how many heroes are considered free additions before the penalty kicks in (default 3). Each hero brings a distinct league, so the first few are almost always good.',
+  heroPenalty:'Hero penalty slope — how steeply value falls per hero past the threshold above (default 0.22). There is a built-in floor: an extra hero always keeps at least 20 % of its base value no matter how high this goes.',
+  normalFloor:'Normal-card glue floor — minimum multiplier applied to normals once you already have 8+ distinct committed Prem clubs (default 0.45). Prevents late normals from being written off entirely.',
+  normalSlope:'Normal-card glue slope — how fast the multiplier falls per extra committed Prem club past the 8-club threshold (default 0.08). Each hold group counts as one club.',
+  clashBase:'Clash penalty base — fixed portion of the penalty applied whenever a card clashes an existing nation/club/league (default 0.6). Raising it makes mild clashes (held cards) feel closer to full-commit clashes. Capped at 2 — above that a mild clash can score worse than a severe one.',
+  clashStack:'Multi-clash stacking — how much steeper the penalty gets for each additional card already held in the same nation/club/league (default 0.50). The runtime multiplier is capped at ×2.0.',
+  holdSizeBase:'Hold-size severity boost — how much the base hold-clash severity rises for a 1-card hold (near-certain to field). A 5-card hold adds nothing; a 1-card hold adds this full amount (default 0.30). Total severity is capped at the same level as a committed-card clash.',
+  holdDomBoost:'Hold-dominance severity boost — extra severity when the best card in a clashed hold group outscores the candidate in the helper’s own eval (default 0.40). A 4-point score gap triggers the full boost; smaller gaps scale linearly.',
+  redundancySurcharge:'Full-redundancy surcharge — extra penalty when a card clashes on every dimension it has: nation + league for heroes, nation + club for normals, nation only for icons. Stacks on top of the per-dimension penalties.',
+  iconRarityRefundCap:'Rare-nation refund cap — when evaluating a 2nd icon, how much of the icon penalty a sufficiently rare nation can cancel (default 0.6 = up to 60 % back). The effective ceiling is around 0.9 — values above that behave the same.',
+  takeThreshold:'Take vs hold gap — how much better the top option must score before the helper calls TAKE instead of HOLD (default 5). Lower = quicker to recommend taking; higher = holds more boards for end-solve.',
+  premHeroRatingThreshold:'Prem-hero rating waiver threshold — rating at which the first penalty waiver kicks in (default 96). Cards at this rating use the low waiver; cards this many + gap points above use the high waiver.',
+  premHeroRatingGap:'Prem-hero rating waiver gap — how many points above the threshold triggers the stronger waiver (default 2, so 98+ at defaults).',
+  premHeroWaiverLow:'Prem-hero low waiver — fraction of the penalty that survives at the threshold rating (default 0.50 = half penalty). 1 = no waiver; 0 = full forgiveness.',
+  premHeroWaiverHigh:'Prem-hero high waiver — fraction of the penalty that survives at the elite rating tier (default 0.20 = 80 % off). Should be lower than the low waiver.',
+  premHeroPosWaiver:'Prem-hero position waiver — fraction of the penalty that survives when the card fills an urgent positional gap (default 0.40). Lower = more forgiving for positional emergencies.',
+  commonNatCount:'Common-nation count — how many top nations (by DB card count) to penalise as overrepresented (default 10, roughly France/England/Brazil…). 0 disables. Affects icons, heroes, and normals.',
+  commonClubCount:'Common-club count — how many top Prem clubs (by card count) to penalise (default 3, typically Man City/Arsenal/Liverpool). 0 disables. Normals only.',
+  commonHeroLeagueCount:'Common hero-league count — how many top hero leagues (by card count) to penalise (default 0 = off). Increase to discourage clustering on the most common hero leagues.',
+  commonNatPenalty:'Common-nation penalty — fraction of the card’s base type weight lost when its nation is in the common list (default 0.25). Example: icon base 12 loses 3 pts.',
+  commonClubPenalty:'Common-club penalty — fraction of the normal base weight lost when the card’s Prem club is in the common list (default 0.25). Normals only.',
+  commonHeroLeaguePenalty:'Common hero-league penalty — fraction of hero base weight lost when the card is a hero in a common hero league (default 0 = off).',
+  lowIconRatingThreshold:'Low-rated icon threshold — icons strictly below this rating get the low-rated icon penalty applied (see main Weights panel). Default 90. The penalty is flat and applies even to your first icon — the free icon slot is best used on a strong card.'
 };
 function renderShape(){const el=$('#shapeGrid');if(!el)return;
   el.innerHTML=Object.keys(SHAPE_DEF).map(k=>{const dec=['iconKeep','iconErosion','heroPenalty','normalFloor','normalSlope','clashBase','clashStack','holdSizeBase','holdDomBoost','redundancySurcharge','iconRarityRefundCap','takeThreshold','premHeroWaiverLow','premHeroWaiverHigh','premHeroPosWaiver','commonNatPenalty','commonClubPenalty','commonHeroLeaguePenalty'];const step=dec.includes(k)?'0.01':'1';return'<div style="display:flex;justify-content:space-between;align-items:center;padding:2px 0"><span style="font-size:11px;color:var(--mut)">'+SHAPE_LABEL[k]+'</span>'+'<input type="number" step="'+step+'" id="shp-'+k+'" value="'+SHAPE[k]+'" style="width:78px;font-size:12px"'
     +' oninput="var _raw=parseFloat(this.value);if(!isNaN(_raw)){SHAPE[\''+k+'\']=_raw;_solveCache=null;}"'
     +' onchange="var _raw=parseFloat(this.value);if(isNaN(_raw))return;var _b=SHAPE_BOUNDS[\''+k+'\'];if(_b){if(_b[0]!==null&&_raw<_b[0]){_raw=_b[0];}if(_b[1]!==null&&_raw>_b[1]){_raw=_b[1];}}SHAPE[\''+k+'\']=_raw;this.value=_raw;_solveCache=null;saveShapeLocal();"'
     +'></div>';}).join('');}
-function resetShape(){SHAPE={...SHAPE_DEF};renderShape();_solveCache=null;}
+function resetShape(){SHAPE={...SHAPE_DEF};renderShape();_solveCache=null;saveShapeLocal();}
 renderShape();
 function squadAwareOn(){if(_forceSquad)return true;const el=$('#hSquad');return!!(el&&el.checked);}
 function noHoldOn(){const el=$('#hNoHold');return!!(el&&el.checked);}
@@ -2100,6 +2101,12 @@ function helpValue(c){
   }
   if(SHAPE.commonHeroLeaguePenalty>0&&c.type==='hero'&&isCommonHeroLeague(leagueOf(c))){
     v-=HW.hero*SHAPE.commonHeroLeaguePenalty;
+  }
+  // Low-rated icon penalty: icons below the threshold lose a fraction of their base value up-front.
+  // Applies regardless of how many icons you already have — even the first icon below the threshold
+  // is penalised, because the free-icon slot is better spent on a strong one.
+  if(HW.lowIconPenalty>0&&c.type==='icon'&&c.rating<SHAPE.lowIconRatingThreshold){
+    v-=HW.icon*HW.lowIconPenalty;
   }
   return v;
 }
