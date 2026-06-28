@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta property="og:description" content="DraftSolver">
-<title>Draft Solver v4.6.5</title>
+<title>Draft Solver v4.6.6</title>
 <style>
 :root{
   --bg:#05080c; --panel:#0c131b; --panel2:#111c27; --line:#1d2c3a;
@@ -118,7 +118,7 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
 </head>
 <body>
 <header>
-  <h1 class="cap">&#11041; Draft Solver <span style="font-size:11px;opacity:.55;font-weight:400;letter-spacing:0">v4.6.5</span></h1>
+  <h1 class="cap">&#11041; Draft Solver <span style="font-size:11px;opacity:.55;font-weight:400;letter-spacing:0">v4.6.6</span></h1>
   <div class="cap sub">pacwyn draft optimiser</div>
 </header>
 
@@ -2396,7 +2396,8 @@ function judgeSlotInline(preCtx){
     }
   }
   _judgeExclude=s.id;_forceSquad=true;
-  const {ranked,verdict:rawVerdict,detail:rawDetail}=rankAndVerdict(opts,isCap);
+  const {ranked,verdict:_rawVerdict,detail:_rawDetail}=rankAndVerdict(opts,isCap);
+  let rawVerdict=_rawVerdict,rawDetail=_rawDetail;
   _judgeExclude=null;_forceSquad=false;_squadOverride=null;_urgentPos=null;
 
   // ---- XI-membership adjustment (Phase 4 solve-ground-truth boost/penalty) ----
@@ -2457,6 +2458,22 @@ function judgeSlotInline(preCtx){
         else{r.v-=XI_BENCH;r._xiNote='bench';}
       });
       ranked.sort((a,b)=>b.v-a.v);
+      // Re-evaluate take vs hold using the post-XI-boost scores.
+      // rankAndVerdict() locked in rawVerdict before the XI adjustments were applied,
+      // so a board that looked tied on heuristics alone (gap < takeThreshold → HOLD)
+      // can now be clearly dominated once starter/bench shifts are factored in.
+      // Only re-run the gap check — all other verdict overrides (soleForce, noHold,
+      // single option) are handled outside this block and take priority anyway.
+      if(!noHoldOn()&&ranked.length>=2){
+        const postDom=ranked[0].v-ranked[1].v>SHAPE.takeThreshold;
+        if(postDom&&rawVerdict==='HOLD'){
+          rawVerdict='TAKE';
+          rawDetail='<b>'+esc(cardName(ranked[0].c))+'</b> is the clear pick \u2014 strongest on type / club / nation / league / fit and projects as the XI starter. Holding any board with 2+ fieldable cards is theoretically a touch better (keeps end-solve freedom), but TAKE is the clean call.';
+        }else if(!postDom&&rawVerdict==='TAKE'){
+          rawVerdict='HOLD';
+          rawDetail='Two or more undominated options \u2014 the XI solve narrows the gap between these, so bank the board and let the end-solve decide which survives the clashes.';
+        }
+      }
     }
   }
 
