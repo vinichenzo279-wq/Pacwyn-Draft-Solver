@@ -1797,145 +1797,20 @@ function _hideSolverOverlay(){
   if(bd)bd.style.display='none';
 }
 
-// iOS-safe async solver. The synchronous DFS blocks the main thread; on iOS/Safari the
-// JS watchdog kills the tab after ~15-30 s of unresponsiveness. Fix: run the search in
-// CHUNK-node slices, yielding to the event loop between each slice via setTimeout(0).
-// This resets the watchdog and keeps the page alive on extended searches.
-//
-// Node counting matches the original exactly: nodes++ fires at the top of every logical
-// dfs() call — i.e. every time we enter a new depth level for a candidate, AND at every
-// leaf — mirroring `if(nodes++>CAP)` in the recursive version.
-let _solveToken=0;
-
-function solveBestAsync(form,cards,nodeCap,token){
-  return new Promise(resolve=>{
-    const CHUNK=50000;
-    const slots=form.slots;
-    const cand=slots.map(s=>cards.filter(c=>c.pos.includes(s)));
-    if(cand.some(l=>l.length===0)){
-      return resolve({error:'A slot has no eligible card: '+slots.filter((s,i)=>cand[i].length===0).join(', ')});
-    }
-    const order=slots.map((s,i)=>i).sort((a,b)=>cand[a].length-cand[b].length);
-    let best=-1,bestXIs=[],nodes=0;
-    const CAP=nodeCap||3000000;
-    let capped=false;
-    const usedGroups=new Set(),pick=new Array(slots.length).fill(null);
-    const groupOf=c=>c.hold||('C'+c.id);
-
-    // Explicit stack replacing the call stack.
-    // Each frame: {k: depth index into `order`, ci: next candidate index to try at this depth}
-    // Invariant: pick[order[k]] and usedGroups reflect the choice made to ENTER this frame
-    // (set by the parent frame before pushing). On backtrack the parent cleans them up.
-    const stack=[];
-
-    function step(){
-      let budget=CHUNK;
-      while(budget-->0){
-        // Seed root frame on very first call
-        if(stack.length===0&&nodes===0){
-          // Count the root dfs(0) call itself, matching `if(nodes++>CAP)` at k=0
-          if(++nodes>CAP){capped=true;break;}
-          stack.push({k:0,ci:0});
-        }
-        if(stack.length===0)break; // search finished
-
-        const frame=stack[stack.length-1];
-        const {k}=frame;
-
-        // ---- Leaf: complete XI ----
-        if(k===order.length){
-          const xi=pick.slice(),sc=scoreXI(xi);
-          if(sc.total>best){best=sc.total;bestXIs=[{xi,sc}];}
-          else if(sc.total===best&&bestXIs.length<40){
-            const key=xi.map(c=>c.id).sort().join(',');
-            if(!bestXIs.some(b=>b.xi.map(c=>c.id).sort().join(',')===key))bestXIs.push({xi,sc});
-          }
-          stack.pop(); // backtrack to parent
-          continue;
-        }
-
-        const slotIdx=order[k];
-        const cs=cand[slotIdx];
-
-        // ---- Prune ----
-        if(best>=0){
-          const partial=pick.filter(Boolean);
-          const remaining=order.length-k;
-          const partialHasIcon=partial.some(c=>c.type==='icon')?1:0;
-          const partialHasHero=partial.some(c=>c.type==='hero')?1:0;
-          const iconBonus=partialHasIcon||Math.min(1,remaining);
-          const heroBonus=partialHasHero||Math.min(1,remaining);
-          const ub=99+33
-            +(new Set(partial.map(c=>c.nation)).size+remaining)
-            +(new Set(partial.map(leagueOf)).size+remaining)
-            +(new Set(partial.filter(c=>c.type==='normal').map(c=>c.club)).size+iconBonus+heroBonus+remaining);
-          if(ub<best){
-            // Undo this frame's pick and backtrack
-            if(pick[slotIdx]!==null){usedGroups.delete(groupOf(pick[slotIdx]));pick[slotIdx]=null;}
-            stack.pop();
-            continue;
-          }
-        }
-
-        // ---- Try next candidate ----
-        let pushed=false;
-        while(frame.ci<cs.length){
-          const c=cs[frame.ci++];
-          const g=groupOf(c);
-          if(usedGroups.has(g))continue;
-          // Undo previous pick at this level before taking a new one
-          if(pick[slotIdx]!==null)usedGroups.delete(groupOf(pick[slotIdx]));
-          usedGroups.add(g);pick[slotIdx]=c;
-          // Count the child dfs(k+1) call — mirrors `if(nodes++>CAP)` in recursive version
-          if(++nodes>CAP){capped=true;}
-          if(!capped){
-            stack.push({k:k+1,ci:0});
-            pushed=true;
-          }
-          break;
-        }
-        if(!pushed&&!capped){
-          // Exhausted all candidates — clean up this level and backtrack
-          if(pick[slotIdx]!==null){usedGroups.delete(groupOf(pick[slotIdx]));pick[slotIdx]=null;}
-          stack.pop();
-        }
-        if(capped)break;
-      }
-
-      if(capped||stack.length===0){
-        resolve({best,bestXIs,nodes,capped,slots});
-      } else if(_solveToken!==token){
-        // A newer runSolve() fired — silently discard this result
-        resolve({best:-1,bestXIs:[],nodes,capped:false,slots,_superseded:true});
-      } else {
-        setTimeout(step,0);
-      }
-    }
-    setTimeout(step,0);
-  });
-}
-
 function runSolve(nodeCap){
   syncAllSlots();
   const out=$('#solveOut');
   if(!chosenForm){out.innerHTML='<div class="note">Pick a formation in the Formation tab first.</div>';return}
   if(cards.length<11){out.innerHTML='<div class="note">Add at least 11 cards (you have '+cards.length+').</div>';return}
   const cap=nodeCap||3000000;
-  _solveToken++;
-  const myToken=_solveToken;
   _showSolverOverlay();
   out.innerHTML='<div class="note" style="color:var(--mut)">\u23f3 Solving\u2026'+(cap>3000000?' (extended search \u2014 '+Math.round(cap/1000000)+'M node cap)':'')+'</div>';
-  const t0=performance.now();
-  const form=FORMS.find(f=>f.name===chosenForm);
-  solveBestAsync(form,cards.slice(),cap,myToken).then(r=>{
-    if(r._superseded)return;
-    const ms=Math.round(performance.now()-t0);
-    _hideSolverOverlay();
-    _runSolveInner(r,ms,cap,form);
-  });
+  setTimeout(()=>_runSolveInner(cap),30);
 }
-function _runSolveInner(r,ms,cap,form){
+function _runSolveInner(cap){
   const out=$('#solveOut');
+  const form=FORMS.find(f=>f.name===chosenForm),t0=performance.now(),r=solveBest(form,cards,cap),ms=Math.round(performance.now()-t0);
+  _hideSolverOverlay();
   if(r.error&&!/no eligible card/.test(r.error)){out.innerHTML='<div class="note" style="border-color:var(--bad)">'+r.error+'</div>';return}
   if(r.error||!r.bestXIs.length){const em=completeOOP(form);
     let rows='';
