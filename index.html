@@ -6,7 +6,7 @@
 <meta property="og:description" content="DraftSolver">
 <!-- VERSION: bump this AND the matching v-number in the <h1><span> below on every patch, however
      small — see the longer note next to the <h1> for why this matters. -->
-<title>Draft Solver v8.0.6</title>
+<title>Draft Solver v8.0.7</title>
 <style>
 :root{
   --bg:#05080c; --panel:#0c131b; --panel2:#111c27; --line:#1d2c3a;
@@ -129,7 +129,7 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
        for the user to tell which build they're on, and (b) can let an incompatible old auto-save
        load as if nothing changed. Bump on every patch, no matter how small.
   -->
-  <h1 class="cap">&#11041; Draft Solver <span style="font-size:11px;opacity:.55;font-weight:400;letter-spacing:0">v8.0.6</span></h1>
+  <h1 class="cap">&#11041; Draft Solver <span style="font-size:11px;opacity:.55;font-weight:400;letter-spacing:0">v8.0.7</span></h1>
   <div class="cap sub">pacwyn draft optimiser</div>
   <div style="position:absolute;right:2px;top:40px;text-align:right;font-size:10px;line-height:1.5;color:var(--mut)">Created by <b style="color:var(--ink)">Chenzo</b><br><span style="opacity:.8">Special thanks to BWFCPackfan</span></div>
 </header>
@@ -3743,7 +3743,7 @@ function _ratingCurveFrac(rating,thr,hardBound,minFrac,maxFrac,isLow){
 function helpValue(c){
   let v=0;
   if(c.type==='icon')v+=HW.icon;
-  else if(c.type==='hero')v+=HW.hero+rarityLg(c.league)*HW.heroLeague;
+  else if(c.type==='hero')v+=HW.hero+(c.league!=='England Premier League'?rarityLg(c.league)*HW.heroLeague:0); // Prem heroes get zero heroLeague credit — their league can't diversify anything, same reasoning as the saturation-curve and common-league exclusions below
   else{v+=HW.normalBase+clubRare(c.club)*HW.clubRarity;}
   v+=rarityNat(c.nation)*HW.nation;
   v+=ratingN(c.rating)*HW.rating;
