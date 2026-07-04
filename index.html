@@ -6,7 +6,7 @@
 <meta property="og:description" content="DraftSolver">
 <!-- VERSION: bump this AND the matching v-number in the <h1><span> below on every patch, however
      small — see the longer note next to the <h1> for why this matters. -->
-<title>Draft Solver v10.0</title>
+<title>Draft Solver v10.0.7</title>
 <style>
 :root{
   --bg:#05080c; --panel:#0c131b; --panel2:#111c27; --line:#1d2c3a;
@@ -441,8 +441,61 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
                the <h1> above) for exactly this situation — a same-session fix-up to a version
                just bumped, so a "v9.5.2" downloaded before this correction and one downloaded
                after are distinguishable instead of silently looking identical.
+       v10.0.1 — Moved the oversized-pool warning ("⚠ N cards on the board — consider removing
+               deadweight...") out of the results panel, where it was misplaced, and into the
+               main XI's capped-search box, alongside the "Keep searching (x3)" / "Search to the
+               end" escalation buttons — that's the box the warning is actually actionable from.
+               The per-slot helper's own copy of the warning is unchanged.
+       v10.0.2 — The recreation log's settings snapshot/diff/format (_recSnapshot/
+               _recNoteSettingsDrift/_recFmtSettings) didn't include "Skip ties", so toggling it
+               mid-session left no trace in the log even though it changes the actual search
+               space (strict-improvement B&B instead of tie-collecting). Now captured like every
+               other solve-affecting setting: appears in "Settings at solve start" and flagged as
+               "skip ties on\u2192off" (or vice versa) if changed between logged steps.
+       v10.0.3 — Fix: with Optimal RC on, "Settings at solve start" recorded the Rating Ceiling
+               BEFORE the auto-snap to maxPossibleRating(), not the value the solve actually ran
+               at \u2014 runSolve's _proceed() logged the recreation-log snapshot (_recLog/
+               _recReset, which reads RC via getRatingCeil()) before calling _applyAutoRC(),
+               which is what moves the slider to the computed ceiling. Fixed by snapping first:
+               _applyAutoRC() now runs before the log snapshot, so the recorded RC always matches
+               the ceiling the solve used. Manual-RC mode (Optimal RC off) was never affected \u2014
+               there's no snap to race with, since getRatingCeil() just reads whatever the user
+               set.
+       v10.0.4 — Prem-hero threshold's clamp in SHAPE_BOUNDS was [80,105], the lone holdout after
+               v9.5.0 widened every other rating-threshold field to [0,105] (see v9.5.0 and the
+               v9.5.2 low/high-boost note above). Changed to [0,105] for consistency; 80 was never
+               reachable in practice anyway since the default is 96, so no behaviour changes.
+       v10.0.5 — Two fixes from an audit of every SHAPE weight's behaviour at 0:
+               (1) Checked all ~50 SHAPE weights for div-by-zero/NaN/blow-up at 0 (separately from
+               the low/high rating-curve thresholds, whose "0 = curve off" behaviour is intentional
+               and unchanged). Found everything else already floors or guards correctly
+               (normalSlope's k=max(0.1,...), _ratingCurveFrac's span=max(1,...), the >0 gates on
+               dominantClashGap/allFirstBonus/common*Penalty, etc.) \u2014 no changes needed there.
+               (2) The prem-hero ramp was the one genuine inconsistency: every other rating curve
+               (low/high icon/hero/normal) is defined by two absolute rating anchors \u2014 a
+               threshold and a hard bound \u2014 with the fraction interpolated between them. Prem-hero
+               instead used a threshold plus an additive "gap" (ramp ends at threshold+gap), which
+               didn't match that pattern and couldn't be seen as a rating value in Advanced.
+               premHeroRatingGap is now premHeroRatingCeiling \u2014 an absolute rating like the other
+               hard bounds \u2014 with the same [0,105] range and a span=max(1,ceiling-threshold) floor
+               (matching _ratingCurveFrac) so a ceiling at or below the threshold can't invert the
+               ramp or divide by zero. Default ceiling is 98 (threshold 96 + old gap 2), so behaviour
+               is unchanged for anyone on defaults; a saved custom gap is migrated to the equivalent
+               ceiling on load so existing customisations keep behaving the same.
+       v10.0.6 — Low-hero penalty defaults were threshold 0 (off) but PenaltyMin 0.25 / PenaltyMax
+               0.75 / HardBound 85 \u2014 functionally inert since _ratingCurveFrac returns 0 whenever
+               the threshold is \u22640, but misleading in Advanced settings: it read like a
+               half-configured 25\u201375% penalty rather than an off switch. All three subordinate
+               fields default to 0 now, matching the threshold. No behaviour change (the curve was
+               already fully inactive at default settings) \u2014 this is a defaults-clarity fix only.
+       v10.0.7 — Two Advanced-settings labels restated their own default value on top of the
+               auto-generated "\u00b7 Default X \u00b7 Range Y\u2192Z" footer every row already gets:
+               low-hero threshold said "0 = off (default)" and low-normal threshold said "0 = off,
+               default 87" \u2014 both now just "0 = off.", matching low-icon's existing clean wording.
+               The footer already states the number; the body text only needs to explain what 0
+               means functionally, not repeat the default a second time.
   -->
-  <h1 class="cap">&#11041; Draft Solver <span style="font-size:11px;opacity:.55;font-weight:400;letter-spacing:0">v10.0</span></h1>
+  <h1 class="cap">&#11041; Draft Solver <span style="font-size:11px;opacity:.55;font-weight:400;letter-spacing:0">v10.0.7</span></h1>
   <div class="cap sub">pacwyn draft optimiser</div>
   <div style="position:absolute;right:2px;top:40px;text-align:right;font-size:10px;line-height:1.5;color:var(--mut)">Created by <b style="color:var(--ink)">Chenzo</b><br><span style="opacity:.8">Special thanks to BWFCPackfan</span></div>
 </header>
@@ -1143,11 +1196,11 @@ let _solveCache=null,_squadOverride=null,_urgentPos=null,_pendFactor=1; // Phase
 let _lastFullRedundant=false; // set by squadAdjust; read by XI-boost phase to suppress boost for commit-clashing cards
 let _evalingSiblings=false; // recursion guard: prevents sibling helpValue calls from triggering further sibling evals
 let NAT_RANK={},LG_RANK={},NAT_COUNT={},CLB_COUNT={},LG_COUNT={},DB_M=1; // raw card counts per nation/club/hero-league + total, from the live DB
-const SHAPE_DEF={clashDraws:23,iconKeep:0.30,iconErosion:0.10,heroFull:3,heroPenalty:0.22,heroRarityRefundCap:0.6,normalFloor:0.45,normalSlope:5,clashBase:0.6,clashStack:0.50,holdSizeBase:0.30,holdDomBoost:0.40,redundancySurcharge:0.6,iconRarityRefundCap:0.6,takeThreshold:10,premHeroRatingThreshold:96,premHeroRatingGap:2,premHeroPenaltyFracLow:1,premHeroPenaltyFracHigh:1,premHeroPenaltyFracUrgentPos:1.0,commonNatCount:10,commonClubCount:3,commonNatPenalty:0.25,commonNatIconExtra:0,commonClubPenalty:0.5,commonHeroLeaguePenalty:0,commonHeroLeagueCount:0,lowIconRatingThreshold:90,lowIconPenaltyMin:0.25,lowIconPenaltyMax:0.75,lowIconHardBound:85,highIconRatingThreshold:96,highIconBoostMin:0.15,highIconBoostMax:0.3,highIconHardBound:99,lowHeroRatingThreshold:0,lowHeroPenaltyMin:0.25,lowHeroPenaltyMax:0.75,lowHeroHardBound:85,highHeroRatingThreshold:96,highHeroBoostMin:0.15,highHeroBoostMax:0.3,highHeroHardBound:99,lowNormalRatingThreshold:87,lowNormalPenaltyMin:0.25,lowNormalPenaltyMax:0.75,lowNormalHardBound:75,highNormalRatingThreshold:96,highNormalBoostMin:0.25,highNormalBoostMax:0.5,highNormalHardBound:99,dominantClashGap:5,outOfFormationPenalty:10,starterBoost:8,benchPenalty:5,holdSevBase:0.4,holdSevCap:0.85,allFirstBonus:5};
+const SHAPE_DEF={clashDraws:23,iconKeep:0.30,iconErosion:0.10,heroFull:3,heroPenalty:0.22,heroRarityRefundCap:0.6,normalFloor:0.45,normalSlope:5,clashBase:0.6,clashStack:0.50,holdSizeBase:0.30,holdDomBoost:0.40,redundancySurcharge:0.6,iconRarityRefundCap:0.6,takeThreshold:10,premHeroRatingThreshold:96,premHeroRatingCeiling:98,premHeroPenaltyFracLow:1,premHeroPenaltyFracHigh:1,premHeroPenaltyFracUrgentPos:1.0,commonNatCount:10,commonClubCount:3,commonNatPenalty:0.25,commonNatIconExtra:0,commonClubPenalty:0.5,commonHeroLeaguePenalty:0,commonHeroLeagueCount:0,lowIconRatingThreshold:90,lowIconPenaltyMin:0.25,lowIconPenaltyMax:0.75,lowIconHardBound:85,highIconRatingThreshold:96,highIconBoostMin:0.15,highIconBoostMax:0.3,highIconHardBound:99,lowHeroRatingThreshold:0,lowHeroPenaltyMin:0,lowHeroPenaltyMax:0,lowHeroHardBound:0,highHeroRatingThreshold:96,highHeroBoostMin:0.15,highHeroBoostMax:0.3,highHeroHardBound:99,lowNormalRatingThreshold:87,lowNormalPenaltyMin:0.25,lowNormalPenaltyMax:0.75,lowNormalHardBound:75,highNormalRatingThreshold:96,highNormalBoostMin:0.25,highNormalBoostMax:0.5,highNormalHardBound:99,dominantClashGap:5,outOfFormationPenalty:10,starterBoost:8,benchPenalty:5,holdSevBase:0.4,holdSevCap:0.85,allFirstBonus:5};
 // Inputs floored at 0 because a negative value here would flip the formula's intent (e.g. extra icons/heroes
 // getting MORE valuable instead of less). clashBase also gets a max: above 2 a mild clash can end up scoring
 // worse than a severe one (see clashBase's label below), so 2 is the point past which the slider works against itself.
-const SHAPE_BOUNDS={clashDraws:[1,100],iconKeep:[0,1],heroFull:[0,10],heroRarityRefundCap:[0,1],normalFloor:[0,1],takeThreshold:[0,20],clashBase:[0,2],clashStack:[0,2],holdSizeBase:[0,1],holdDomBoost:[0,1],heroPenalty:[0,2],normalSlope:[0.1,20],iconErosion:[0,1],iconRarityRefundCap:[0,1],redundancySurcharge:[0,2],premHeroRatingThreshold:[80,105],premHeroRatingGap:[1,10],premHeroPenaltyFracLow:[0,1],premHeroPenaltyFracHigh:[0,1],premHeroPenaltyFracUrgentPos:[0,1],commonNatCount:[0,30],commonClubCount:[0,20],commonNatPenalty:[0,1],commonNatIconExtra:[0,1],commonClubPenalty:[0,1],commonHeroLeaguePenalty:[0,1],commonHeroLeagueCount:[0,30],lowIconRatingThreshold:[0,105],lowIconPenaltyMin:[0,1],lowIconPenaltyMax:[0,2],lowIconHardBound:[0,105],highIconRatingThreshold:[0,105],highIconBoostMin:[0,1],highIconBoostMax:[0,2],highIconHardBound:[0,105],lowHeroRatingThreshold:[0,105],lowHeroPenaltyMin:[0,1],lowHeroPenaltyMax:[0,2],lowHeroHardBound:[0,105],highHeroRatingThreshold:[0,105],highHeroBoostMin:[0,1],highHeroBoostMax:[0,2],highHeroHardBound:[0,105],lowNormalRatingThreshold:[0,105],lowNormalPenaltyMin:[0,1],lowNormalPenaltyMax:[0,2],lowNormalHardBound:[0,105],highNormalRatingThreshold:[0,105],highNormalBoostMin:[0,1],highNormalBoostMax:[0,2],highNormalHardBound:[0,105],dominantClashGap:[0,30],outOfFormationPenalty:[0,50],starterBoost:[0,30],benchPenalty:[0,30],holdSevBase:[0,2],holdSevCap:[0,2],allFirstBonus:[0,20]};
+const SHAPE_BOUNDS={clashDraws:[1,100],iconKeep:[0,1],heroFull:[0,10],heroRarityRefundCap:[0,1],normalFloor:[0,1],takeThreshold:[0,20],clashBase:[0,2],clashStack:[0,2],holdSizeBase:[0,1],holdDomBoost:[0,1],heroPenalty:[0,2],normalSlope:[0.1,20],iconErosion:[0,1],iconRarityRefundCap:[0,1],redundancySurcharge:[0,2],premHeroRatingThreshold:[0,105],premHeroRatingCeiling:[0,105],premHeroPenaltyFracLow:[0,1],premHeroPenaltyFracHigh:[0,1],premHeroPenaltyFracUrgentPos:[0,1],commonNatCount:[0,30],commonClubCount:[0,20],commonNatPenalty:[0,1],commonNatIconExtra:[0,1],commonClubPenalty:[0,1],commonHeroLeaguePenalty:[0,1],commonHeroLeagueCount:[0,30],lowIconRatingThreshold:[0,105],lowIconPenaltyMin:[0,1],lowIconPenaltyMax:[0,2],lowIconHardBound:[0,105],highIconRatingThreshold:[0,105],highIconBoostMin:[0,1],highIconBoostMax:[0,2],highIconHardBound:[0,105],lowHeroRatingThreshold:[0,105],lowHeroPenaltyMin:[0,1],lowHeroPenaltyMax:[0,2],lowHeroHardBound:[0,105],highHeroRatingThreshold:[0,105],highHeroBoostMin:[0,1],highHeroBoostMax:[0,2],highHeroHardBound:[0,105],lowNormalRatingThreshold:[0,105],lowNormalPenaltyMin:[0,1],lowNormalPenaltyMax:[0,2],lowNormalHardBound:[0,105],highNormalRatingThreshold:[0,105],highNormalBoostMin:[0,1],highNormalBoostMax:[0,2],highNormalHardBound:[0,105],dominantClashGap:[0,30],outOfFormationPenalty:[0,50],starterBoost:[0,30],benchPenalty:[0,30],holdSevBase:[0,2],holdSevCap:[0,2],allFirstBonus:[0,20]};
 let SHAPE={...SHAPE_DEF}; // tunable: clash-draw count (rarity = P(no clash over this many random draws)) + icon/hero diminishing
 const _SHAPE_SAVE_KEY='pacwyn_shape_v1';
 function saveShapeLocal(){try{localStorage.setItem(_SHAPE_SAVE_KEY,JSON.stringify(SHAPE));}catch(e){}}
@@ -1155,6 +1208,14 @@ function saveShapeLocal(){try{localStorage.setItem(_SHAPE_SAVE_KEY,JSON.stringif
   try{
     const raw=localStorage.getItem(_SHAPE_SAVE_KEY);if(!raw)return;
     const saved=JSON.parse(raw);if(!saved||typeof saved!=='object')return;
+    // v10.0.4 rename: premHeroRatingGap (an additive offset from the threshold) became
+    // premHeroRatingCeiling (an absolute rating, matching every other curve's threshold+hardBound
+    // pair). Translate an old save's gap into the equivalent ceiling so a previously-customised
+    // ramp keeps behaving the same after the rename, instead of silently reverting to the default.
+    if(saved.premHeroRatingCeiling===undefined&&typeof saved.premHeroRatingGap==='number'){
+      const _thr=typeof saved.premHeroRatingThreshold==='number'?saved.premHeroRatingThreshold:SHAPE_DEF.premHeroRatingThreshold;
+      saved.premHeroRatingCeiling=_thr+saved.premHeroRatingGap;
+    }
     // Merge over the defaults (not a straight overwrite) so a save from an older version that is missing
     // a key (e.g. this update added several) falls back to that key's default instead of becoming undefined/NaN.
     SHAPE={...SHAPE_DEF,...saved};
@@ -1187,8 +1248,8 @@ function _clearSolve(){lastSolve=null;window._solved=null;window._solveCtx=null;
    Stamped into lastSolve (settings/steps) at applyTie/emergency time, so it persists through
    save/export/restore with everything else and refreshLog can print it. */
 let _recActions=[],_recBase=null,_recCurSettings=null;
-function _recSnapshot(){return {rc:getRatingCeil(),capM:Math.round(getNodeCap()/1000000),target:_targetScore()||0,bench:_benchMode(),mgrDepth:_mgrFrac()};}
-function _recFmtSettings(s){return 'RC '+s.rc+' \u00b7 node cap '+s.capM+'M \u00b7 target '+(s.target?s.target:'off')+' \u00b7 bench speed '+s.bench+' \u00b7 mgr depth '+(typeof s.mgrDepth==='number'?s.mgrDepth.toFixed(2):s.mgrDepth);}
+function _recSnapshot(){return {rc:getRatingCeil(),capM:Math.round(getNodeCap()/1000000),target:_targetScore()||0,bench:_benchMode(),mgrDepth:_mgrFrac(),skipTies:_skipTies()};}
+function _recFmtSettings(s){return 'RC '+s.rc+' \u00b7 node cap '+s.capM+'M \u00b7 target '+(s.target?s.target:'off')+' \u00b7 bench speed '+s.bench+' \u00b7 mgr depth '+(typeof s.mgrDepth==='number'?s.mgrDepth.toFixed(2):s.mgrDepth)+' \u00b7 skip ties '+(s.skipTies?'on':'off');}
 function _recNoteSettingsDrift(){
   const cur=_recSnapshot();
   if(_recCurSettings){
@@ -1198,6 +1259,7 @@ function _recNoteSettingsDrift(){
     if(cur.target!==p.target)d.push('target '+(p.target||'off')+'\u2192'+(cur.target||'off'));
     if(cur.bench!==p.bench)d.push('bench speed '+p.bench+'\u2192'+cur.bench);
     if(cur.mgrDepth!==p.mgrDepth)d.push('mgr depth '+p.mgrDepth.toFixed(2)+'\u2192'+cur.mgrDepth.toFixed(2));
+    if(cur.skipTies!==p.skipTies)d.push('skip ties '+(p.skipTies?'on':'off')+'\u2192'+(cur.skipTies?'on':'off'));
     if(d.length)_recActions.push('settings changed: '+d.join(', '));
   }
   _recCurSettings=cur;
@@ -2839,11 +2901,15 @@ function runSolve(nodeCap,reuseSeed){runSolve.__reuse=!!reuseSeed;
     // the Solve button always calls runSolve() bare, which is what defines "from scratch" and resets
     // the step list + re-snapshots the base settings. Logged here (post-commit), so a cancelled 150M
     // warning leaves the recreation log untouched along with everything else.
+    // Auto-RC snap MUST happen before the log snapshot below — with Optimal RC on, getRatingCeil()
+    // (which the snapshot reads) only reflects the actual solve ceiling once the slider's been
+    // snapped to maxPossibleRating(); logging first recorded the pre-snap manual-slider leftover
+    // instead of the RC the solve actually ran at.
+    _applyAutoRC();
     if(nodeCap)_recLog('main solve: '+_recCapTxt(cap));else _recReset();
     _clearSolve();refreshLog();
     _showSolverOverlay();
     out.innerHTML='<div class="note" style="color:var(--mut)">\u23f3 Solving\u2026'+(cap>10000000?' (extended search \u2014 '+Math.round(cap/1000000)+'M node cap)':'')+'</div>';
-    _applyAutoRC(); // Optimal RC on -> snap the slider to the computed UB before getRatingCeil() is read below (and by the OOP path)
     setTimeout(()=>_runSolveInner(cap,getRatingCeil(),runSolve.__reuse),30);
   };
   if(cap>150000000){
@@ -3630,7 +3696,7 @@ function _cappedWarnHTML(cap){
     +'<button class="btn sm" onclick="runSolve('+nextCap+')">Keep searching ('+(nextCap/1000000)+'M)</button>'
     +'<button class="btn sec sm" onclick="runSolve(1e12,true)">Search to the end</button>'
     +'<button class="btn gho sm" onclick="this.closest(\'.note\').remove()">Accept this result</button>'
-    +'</div></div>';
+    +'</div>'+_poolSizeWarning()+'</div>';
 }
 function applyTie(idx){
   const ctx=window._solveCtx;if(!ctx)return;
@@ -4126,7 +4192,7 @@ function _pickPanelSuffixes(picks,holdGroups){
     +'<div class="rings"><div class="ring n"><b>'+sc.nations+'</b><span>NATIONS</span></div>'
     +'<div class="ring l"><b>'+sc.leagues+'</b><span>LEAGUES</span></div>'
     +'<div class="ring c"><b>'+sc.clubs+'</b><span>CLUBS</span></div></div>'
-    +'<div class="tiny" style="margin-top:8px">Chem '+chemFlag+' \u00b7 '+r.nodes.toLocaleString()+' nodes'+_msTxt+_faTxt+(r.capped?' \u00b7 result shown above':'')+'</div>'+tieNote+_poolSizeWarning()+'</div>'
+    +'<div class="tiny" style="margin-top:8px">Chem '+chemFlag+' \u00b7 '+r.nodes.toLocaleString()+' nodes'+_msTxt+_faTxt+(r.capped?' \u00b7 result shown above':'')+'</div>'+tieNote+'</div>'
   +'<div class="panel"><h2>Starting XI</h2><div class="xi">'+xiHtml+'</div></div>'
   +'<div class="panel"><h2>Pick per hold</h2>'+hp+'<div class="tiny" style="margin-top:6px">In hold order. Committed cards need no pick.</div>'+(subPicks.length?'<div class="tiny" style="margin:8px 0 4px;color:var(--mut)">The rest won\u2019t start \u2014 pick these for sub / manager-insurance value:</div>'+subPicksHtml:'')+'</div>'
   +'<div class="panel"><h2>Bench \u2014 manager insurance</h2><div class="tiny">Best leftover from each unused hold. \u2605 = carries something fresh that can sub in if a manager clashes.</div><div class="xi" style="margin-top:6px">'+benchHtml+'</div>'+_reanalyzeBenchBtn()+'</div>'+benchNote;
@@ -4689,7 +4755,7 @@ const SHAPE_LABEL={
   highIconBoostMin:'High-rated icon boost (min) \u2014 value an icon gains at the threshold rating. Keep \u2264 the max.',
   highIconBoostMax:'High-rated icon boost (max) \u2014 value an icon gains at the ceiling rating below. Keep \u2265 the min.',
   highIconHardBound:'High-icon boost ceiling \u2014 rating at/above which the high-icon boost is fully maxed out. Keep above the threshold above.',
-  lowHeroRatingThreshold:'Low-hero penalty threshold \u2014 rating at/below which heroes start losing value. 0 = off (default).',
+  lowHeroRatingThreshold:'Low-hero penalty threshold \u2014 rating at/below which heroes start losing value. 0 = off.',
   lowHeroPenaltyMin:'Low-rated hero penalty (min) \u2014 value a hero loses at the threshold rating. Keep \u2264 the max.',
   lowHeroPenaltyMax:'Low-rated hero penalty (max) \u2014 value a hero loses at the floor rating below. Keep \u2265 the min.',
   lowHeroHardBound:'Low-hero penalty floor \u2014 rating at/below which the low-hero penalty is fully maxed out.',
@@ -4697,7 +4763,7 @@ const SHAPE_LABEL={
   highHeroBoostMin:'High-rated hero boost (min) \u2014 value a hero gains at the threshold rating. Keep \u2264 the max.',
   highHeroBoostMax:'High-rated hero boost (max) \u2014 value a hero gains at the ceiling rating below. Keep \u2265 the min.',
   highHeroHardBound:'High-hero boost ceiling \u2014 rating at/above which the high-hero boost is fully maxed out. Keep above the threshold above.',
-  lowNormalRatingThreshold:'Low-normal penalty threshold \u2014 rating at/below which normals start losing value. 0 = off, default 87.',
+  lowNormalRatingThreshold:'Low-normal penalty threshold \u2014 rating at/below which normals start losing value. 0 = off.',
   lowNormalPenaltyMin:'Low-rated normal penalty (min) \u2014 value a normal loses at the threshold rating. Keep \u2264 the max.',
   lowNormalPenaltyMax:'Low-rated normal penalty (max) \u2014 value a normal loses at the floor rating below. Keep \u2265 the min.',
   lowNormalHardBound:'Low-normal penalty floor \u2014 rating at/below which the low-normal penalty is fully maxed out.',
@@ -4711,7 +4777,7 @@ const SHAPE_LABEL={
   normalFloor:'Normal glue floor (squad mode) \u2014 the lowest multiplier a saturating normal keeps.',
   normalSlope:'Normal glue steepness (squad mode) \u2014 clubs past 7 where the penalty is half-way to the floor. Lower = bites sooner.',
   premHeroRatingThreshold:'Prem-hero threshold \u2014 below this rating the full prem-hero penalty always applies.',
-  premHeroRatingGap:'Prem-hero ramp \u2014 points above the threshold for the ceiling fraction to fully apply.',
+  premHeroRatingCeiling:'Prem-hero ceiling \u2014 rating at/above which the ceiling forgiveness fraction fully applies. Keep above the threshold above.',
   premHeroPenaltyFracLow:'Prem-hero forgiveness at threshold \u2014 how much of the penalty is waived at the threshold rating (0 = full penalty, 1 = fully forgiven).',
   premHeroPenaltyFracHigh:'Prem-hero forgiveness at ceiling \u2014 how much is waived at elite ratings. Set above the threshold value to ease elites.',
   premHeroPenaltyFracUrgentPos:'Prem-hero urgent-slot relief (squad mode) \u2014 forgiveness when it fills a needed slot (from pick 12). 0 = no relief.',
@@ -4738,15 +4804,15 @@ const SHAPE_LABEL={
 };
 const SHAPE_CATEGORIES=[
   {key:'icon',keys:['iconKeep','iconErosion','iconRarityRefundCap',
-    'lowIconRatingThreshold','lowIconPenaltyMin','lowIconPenaltyMax','lowIconHardBound',
-    'highIconRatingThreshold','highIconBoostMin','highIconBoostMax','highIconHardBound']},
+    'lowIconRatingThreshold','lowIconHardBound','lowIconPenaltyMin','lowIconPenaltyMax',
+    'highIconRatingThreshold','highIconHardBound','highIconBoostMin','highIconBoostMax']},
   {key:'hero',keys:['heroFull','heroPenalty','heroRarityRefundCap',
-    'lowHeroRatingThreshold','lowHeroPenaltyMin','lowHeroPenaltyMax','lowHeroHardBound',
-    'highHeroRatingThreshold','highHeroBoostMin','highHeroBoostMax','highHeroHardBound']},
-  {key:'premhero',keys:['premHeroRatingThreshold','premHeroRatingGap','premHeroPenaltyFracLow','premHeroPenaltyFracHigh','premHeroPenaltyFracUrgentPos']},
+    'lowHeroRatingThreshold','lowHeroHardBound','lowHeroPenaltyMin','lowHeroPenaltyMax',
+    'highHeroRatingThreshold','highHeroHardBound','highHeroBoostMin','highHeroBoostMax']},
+  {key:'premhero',keys:['premHeroRatingThreshold','premHeroRatingCeiling','premHeroPenaltyFracLow','premHeroPenaltyFracHigh','premHeroPenaltyFracUrgentPos']},
   {key:'normal',keys:['normalFloor','normalSlope',
-    'lowNormalRatingThreshold','lowNormalPenaltyMin','lowNormalPenaltyMax','lowNormalHardBound',
-    'highNormalRatingThreshold','highNormalBoostMin','highNormalBoostMax','highNormalHardBound']},
+    'lowNormalRatingThreshold','lowNormalHardBound','lowNormalPenaltyMin','lowNormalPenaltyMax',
+    'highNormalRatingThreshold','highNormalHardBound','highNormalBoostMin','highNormalBoostMax']},
   {key:'clash',keys:['clashDraws','clashBase','clashStack','holdSizeBase','holdDomBoost','holdSevBase','holdSevCap','redundancySurcharge','dominantClashGap']},
   {key:'common',keys:['commonNatCount','commonNatPenalty','commonNatIconExtra','commonClubCount','commonClubPenalty','commonHeroLeagueCount','commonHeroLeaguePenalty']},
   {key:'misc',keys:['takeThreshold','starterBoost','benchPenalty','outOfFormationPenalty','allFirstBonus']},
@@ -5097,9 +5163,10 @@ function helpValue(c){
   if(c.type==='hero'&&c.league==='England Premier League'&&HW.premHeroPenalty>0){
     let pen=HW.premHeroPenalty;
     const thr=SHAPE.premHeroRatingThreshold||96;
-    const gap=SHAPE.premHeroRatingGap||2;
+    const ceil=SHAPE.premHeroRatingCeiling!=null?SHAPE.premHeroRatingCeiling:98;
     if(c.rating>=thr){
-      const t=Math.min(1,(c.rating-thr)/gap); // 0 at threshold, 1 at threshold+gap
+      const span=Math.max(1,ceil-thr); // same floor _ratingCurveFrac uses \u2014 keeps this sound if the ceiling is set at/below the threshold
+      const t=Math.min(1,Math.max(0,(c.rating-thr)/span)); // 0 at threshold, 1 at/above ceiling
       const penFrac=SHAPE.premHeroPenaltyFracLow+t*t*(SHAPE.premHeroPenaltyFracHigh-SHAPE.premHeroPenaltyFracLow);
       pen*=Math.max(0,Math.min(1,penFrac));
     }
