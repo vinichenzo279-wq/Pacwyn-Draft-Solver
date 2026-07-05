@@ -6,7 +6,7 @@
 <meta property="og:description" content="DraftSolver">
 <!-- VERSION: bump this AND the matching v-number in the <h1><span> below on every patch, however
      small — see the longer note next to the <h1> for why this matters. -->
-<title>Draft Solver v13.4.2</title>
+<title>Draft Solver v13.4.3.2</title>
 <style>
 :root{
   --bg:#05080c; --panel:#0c131b; --panel2:#111c27; --line:#1d2c3a;
@@ -1233,6 +1233,24 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
           those are all still fully superseded by the calibrated scorer, so full-group graying there
           remains correct.
   -->
+  <!-- v13.4.3 — UNCALIBRATE BUTTON. Once "Calibrate from DB" had been run, there was no way back to
+       the manual HW/SHAPE weights short of clearing site storage entirely — NOHOLD_CAL persists in
+       localStorage indefinitely and _renderCalResult() only ever offered "Recalibrate". Added an
+       "Uncalibrate" button next to it (clearNoHoldCalibration()): nulls NOHOLD_CAL, removes the
+       pacwyn_nohold_cal_v3 localStorage key, invalidates _solveCache, and re-renders — same state as
+       if calibration had never been run. No change to the calibration engine, scorer, or fit logic.
+  -->
+  <!-- v13.4.3.2 — RESET WEIGHTS/SHAPE COULD UN-GRAY A LIVE CALIBRATION. resetWeights()/resetShape()
+       rebuild #hwGrid/#shapeGrid-* from scratch (renderWeights()/renderShape()), which wipes any
+       inline opacity/pointerEvents/disabled state _calGrayManual() had applied — including the
+       v13.4.1 per-row exception that keeps starterBoost/benchPenalty live while everything else in
+       "misc" grays out under an active calibration. Clicking either reset button while calibrated
+       no-hold ranking was active left the freshly-rebuilt grid fully live (all of "misc" included),
+       wrongly implying those inputs mattered again until the next toggle/recalibrate re-synced the
+       graying. Both functions now call _calGrayManual(_calActive()) right after their render call,
+       so a reset re-applies exactly the same graying state (full group, or the two-row exception)
+       the grid already had — no change to what gets reset or to the calibration engine itself.
+  -->
   <!-- ================================================================================================
        FOR FUTURE MAINTAINERS — KEY REFERENCE MATERIAL (read before major solver/pick-time changes)
        ================================================================================================
@@ -1463,8 +1481,24 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
                of call-sites, engine intact"; a formula change (F.2) is closer to "the UB proof and
                every hand-duplicated scorer need to be rebuilt," even though the DFS engine and the
                advisory/calibration layers on top of it still don't need to change.
+
+       G. CHANGELOG DISCIPLINE (added v13.4.3.1, process convention — not a code/logic entry).
+          The v13.4.2-ios "PORT PASS" entry (see the -ios file's changelog) claimed four versions'
+          worth of fixes (v13.3/13.4/13.4.1/13.4.2) had been ported across, written by whichever
+          pass was doing that port. In fact only v13.3 had actually landed in code at that point —
+          the entry was written first, describing the INTENDED full scope, and the pass then ran out
+          of time/budget before finishing v13.4/13.4.1/13.4.2, leaving a changelog that confidently
+          documented fixes which had not happened. Anyone reading that changelog (without diffing
+          against the non-iOS build line-by-line, which is what caught it) would reasonably have
+          trusted it. Convention going forward, for this file and the -ios file both: a changelog
+          entry is written ONLY after its described change is actually implemented and verified in
+          the code above it — never before, and never as a running commentary on work still in
+          progress. If a pass runs out of budget partway through a multi-item entry, whatever
+          shipped gets its own accurately-scoped entry (or none, if nothing shipped); the unfinished
+          remainder is not written up as done. A changelog is a record of what IS true of the code,
+          not a plan or a status update.
   -->
-  <h1 class="cap">&#11041; Draft Solver <span style="font-size:11px;opacity:.55;font-weight:400;letter-spacing:0">v13.4.2</span></h1>
+  <h1 class="cap">&#11041; Draft Solver <span style="font-size:11px;opacity:.55;font-weight:400;letter-spacing:0">v13.4.3.2</span></h1>
   <div class="cap sub">pacwyn draft optimiser</div>
   <div style="position:absolute;right:2px;top:40px;text-align:right;font-size:10px;line-height:1.5;color:var(--mut)">Created by <b style="color:var(--ink)">Chenzo</b><br><span style="opacity:.8">Special thanks to BWFCPackfan</span></div>
 </header>
@@ -6231,7 +6265,7 @@ function saveHW(){try{localStorage.setItem(_HW_SAVE_KEY,JSON.stringify(HW));}cat
 function renderWeights(){const el=$('#hwGrid');if(!el)return;
   el.innerHTML=HW_ORDER.filter(k=>k in HW_DEF).concat(Object.keys(HW_DEF).filter(k=>HW_ORDER.indexOf(k)<0)).map(k=>{return'<div style="display:flex;justify-content:space-between;align-items:center;padding:2px 0"><span style="font-size:11px;color:var(--mut);max-width:74%">'+HW_LABEL[k]+'<span style="opacity:.55"> \u00b7 Default '+HW_DEF[k]+'</span></span>'
     +'<input type="number" step="0.01" id="hw-'+k+'" value="'+HW[k]+'" style="width:78px;font-size:12px" oninput="var _r=parseFloat(this.value);if(!isNaN(_r)){HW[this.id.slice(3)]=_r;_solveCache=null;}" onchange="var _r=parseFloat(this.value);if(isNaN(_r))return;_r=Math.max(0,_r);var _k=this.id.slice(3);HW[_k]=_r;this.value=_r;_solveCache=null;saveHW();"></div>';}).join('');}
-function resetWeights(){if(!confirm('Reset all weights to their defaults?'))return;HW={...HW_DEF};renderWeights();_solveCache=null;saveHW();}
+function resetWeights(){if(!confirm('Reset all weights to their defaults?'))return;HW={...HW_DEF};renderWeights();_calGrayManual(_calActive());_solveCache=null;saveHW();}
 renderWeights();
 
 /* ============================ FORMATION WEIGHTS ============================ */
@@ -6356,7 +6390,7 @@ function renderShape(){
     el.innerHTML=keys.filter(k=>k in SHAPE_DEF).map(_renderShapeRow).join('');
   });
 }
-function resetShape(){if(!confirm('Reset all shape settings to their defaults?'))return;SHAPE={...SHAPE_DEF};renderShape();_solveCache=null;saveShapeLocal();}
+function resetShape(){if(!confirm('Reset all shape settings to their defaults?'))return;SHAPE={...SHAPE_DEF};renderShape();_calGrayManual(_calActive());_solveCache=null;saveShapeLocal();}
 renderShape();
 function squadAwareOn(){return _forceSquad;}
 function noHoldOn(){const el=$('#hNoHold');return!!(el&&el.checked);}
@@ -6888,7 +6922,19 @@ function _renderCalResult(){
   html+='<div class="tiny" style="margin-top:6px;color:var(--mut)">Fit: '+NOHOLD_CAL.nScripts+' scenarios, K='+NOHOLD_CAL.K+' &middot; DB '+(NOHOLD_CAL.hash>>>0).toString(16).slice(0,8)+' &middot; seed '+(NOHOLD_CAL.seed>>>0)+' &middot; '+NOHOLD_CAL.date
     +'<br>One of several near-optimal balances (the objective is flat near the top) &mdash; treat as guidance, not exact truth.</div>';
   html+='<button class="btn gho sm" style="margin-top:7px" onclick="runNoHoldCalibration()">Recalibrate</button>';
+  html+='<button class="btn gho sm" style="margin-top:6px;color:var(--warn)" onclick="clearNoHoldCalibration()">Uncalibrate</button>';
   box.innerHTML=html;
+}
+// Wipes the stored calibration (state + localStorage) so no-hold drafting falls back to the manual
+// HW/SHAPE weights, same as if it had never been calibrated. Previously there was no way back once
+// calibrated other than clearing site data entirely.
+function clearNoHoldCalibration(){
+  NOHOLD_CAL=null;
+  try{localStorage.removeItem(_NOHOLD_CAL_KEY);}catch(e){}
+  _solveCache=null;
+  _renderCalResult(); // NOHOLD_CAL is now null, so this also handles the _calGrayManual(false) reset
+  if(typeof judgeBoard==='function'&&$('#helpOut')&&$('#helpOut').innerHTML.trim())judgeBoard();
+  if(typeof refreshBoard==='function')try{refreshBoard();}catch(e){}
 }
 function _calFinish(res,st,btn,t0){
   if(res.error){
