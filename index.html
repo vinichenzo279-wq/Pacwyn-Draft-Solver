@@ -6,7 +6,7 @@
 <meta property="og:description" content="DraftSolver">
 <!-- VERSION: bump this AND the matching v-number in the <h1><span> below on every patch, however
      small — see the longer note next to the <h1> for why this matters. -->
-<title>Draft Solver v13.3</title>
+<title>Draft Solver v13.4.2</title>
 <style>
 :root{
   --bg:#05080c; --panel:#0c131b; --panel2:#111c27; --line:#1d2c3a;
@@ -1171,6 +1171,68 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
        emergency fills") and that line remains accurate; this version only upgrades the SOLVE that
        picks the in-position XI, not the post-solve manager summary.
   -->
+  <!-- v13.4 — CONFIGURABLE CALIBRATION SIMULATION SIZE + SEED. The no-hold DB calibration
+       ("Calibrate from DB") previously always ran a hardcoded 150 simulated drafts on a seed
+       derived solely from the DB's own contents (_calDbHash), with no way to change either.
+       1. # DRAFTS TO SIMULATE box (default 150, min 1) — replaces the hardcoded nScripts. Values
+          over 1000 trigger a confirm() warning ("could take minutes, and provide negligible
+          results...") before running; cancelling leaves the existing calibration/UI untouched.
+       2. SEED box (optional, 0..4294967295, blank = auto) — lets a re-run be repeated exactly or
+          varied deliberately, instead of always reusing the DB-derived seed. Out-of-range or non-
+          numeric input is clamped/ignored (falls back to auto) and the box is rewritten with
+          whatever value was actually used, so it never silently shows something different from
+          what ran. Important: the DB-hash staleness check (NOHOLD_CAL.hash vs _calDbHash(playerDB))
+          is completely independent of this — hash still means "was this fitted against the
+          currently-loaded DB," seed is a separate new field recording which rng seed drove that
+          fit, so overriding the seed can never make a stale-DB calibration look fresh (or vice
+          versa). Result card's footer now shows the seed used alongside scenario count/DB hash/date.
+       3. _NOHOLD_CAL_KEY bumped v2->v3 since the stored result gained a `seed` field — old blobs
+          predate it and would otherwise display a misleading "seed 0"; the bump makes them get
+          discarded and recalibrated instead.
+  -->
+  <!-- v13.4.1 — FIX: large # DRAFTS (nScripts) COULD FREEZE THE TAB. The v13.4 "confirm" warning
+       fired correctly at >1000, but the run itself was still one long uninterrupted synchronous
+       block — fine at the old fixed 150, but at a few thousand drafts (now user-choosable) it could
+       run long enough that the browser treats the tab as unresponsive. Fixed by risk-scoping the
+       change to ONLY the >1000 path, using the same threshold as the existing confirm:
+       - nScripts<=1000 (the overwhelming majority of real usage, and the exact behavior that shipped
+         and was already relied on): completely untouched, still calls the original synchronous
+         _calibrateNoHold() with zero code-path changes.
+       - nScripts>1000 (already gated behind the "this may take minutes" confirm): now calls new
+         _calibrateNoHoldAsync(), an async twin that periodically `await`s a setTimeout(0) yield
+         (roughly once per ~40ms of work) instead of running start-to-finish in one block, and
+         reports live status text ("Searching weight space… NN%" / "Refining weights…") while it
+         runs. Same algorithm, same rng draw order (scoreXI/leagueOf are pure functions with no
+         globals, so interleaving other event-loop work between iterations doesn't reorder or skip
+         any of the actual computation) — the only change is WHEN control briefly returns to the
+         browser, not WHAT gets computed or in what order, so a given seed+nScripts still produces
+         the identical fitted weights either way. If this path ever misbehaves, the <=1000 path
+         (the default, and everything most users will ever touch) is provably unaffected by it.
+       Shared the on-success/on-error handling between both paths via a new _calFinish() helper
+       (localStorage save, status text, log line, board refresh) so the two paths can't drift.
+  -->
+  <!-- v13.4.2 — TWO FIXES TO THE SAME-HOLD STARTER-VS-BENCH NOTE + CALIBRATED GRAYOUT.
+       1. "FAVOURING" WORDING. The inline note ("You're currently favouring X over Y...") could fire
+          even when the starter's own adjusted score was ALREADY at or below the bench card's score
+          (e.g. tested with an extreme rating on the bench card) — "favouring" wrongly implies the
+          starter is winning on score. Now checks bestStarter.v>bestBench.v: only says "favouring"
+          when that's actually true; otherwise says the board is "currently starting X, even though
+          it already scores at or below Y" — accurate either way, since a lower-scoring card can
+          still be the one started (e.g. because the board needs the position filled right now).
+       2. CALIBRATED-MODE GRAYOUT WAS TOO BLUNT. Confirmed the starter-boost/bench-penalty XI-
+          membership adjustment (SHAPE.starterBoost/benchPenalty — the same one explained in the
+          note above) is applied AFTER ranking, completely outside helpValue()'s early-return for
+          calibrated no-hold mode — so unlike every other manual weight, it keeps having a real,
+          visible effect even when calibrated ranking owns everything else. _calGrayManual()
+          previously grayed the entire "misc" SHAPE group as one block (which includes those two
+          keys) whenever calibration was active, incorrectly implying they'd become inert. Now grays
+          per-ROW instead of per-group for "misc" specifically: starterBoost and benchPenalty stay
+          live and editable, while the genuinely-inert rest of that group (takeThreshold,
+          outOfFormationPenalty, allFirstBonus, allNonePenalty) stays grayed exactly as before. Every
+          other group (icon/hero/premhero/normal/clash/common) and all of hwGrid are untouched —
+          those are all still fully superseded by the calibrated scorer, so full-group graying there
+          remains correct.
+  -->
   <!-- ================================================================================================
        FOR FUTURE MAINTAINERS — KEY REFERENCE MATERIAL (read before major solver/pick-time changes)
        ================================================================================================
@@ -1402,7 +1464,7 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
                every hand-duplicated scorer need to be rebuilt," even though the DFS engine and the
                advisory/calibration layers on top of it still don't need to change.
   -->
-  <h1 class="cap">&#11041; Draft Solver <span style="font-size:11px;opacity:.55;font-weight:400;letter-spacing:0">v13.3</span></h1>
+  <h1 class="cap">&#11041; Draft Solver <span style="font-size:11px;opacity:.55;font-weight:400;letter-spacing:0">v13.4.2</span></h1>
   <div class="cap sub">pacwyn draft optimiser</div>
   <div style="position:absolute;right:2px;top:40px;text-align:right;font-size:10px;line-height:1.5;color:var(--mut)">Created by <b style="color:var(--ink)">Chenzo</b><br><span style="opacity:.8">Special thanks to BWFCPackfan</span></div>
 </header>
@@ -1649,7 +1711,9 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
     <label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--ink);margin:4px 0 6px"><input type="checkbox" id="hNoHold" onchange="onNoHoldToggle()"> No-hold drafting &mdash; always TAKE the top option (never suggest a hold)</label>
     <div id="noHoldCalWrap" style="display:none;margin:0 0 10px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:rgba(120,140,255,.05)">
       <div style="font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px">Objective weights &mdash; calibrated from your DB</div>
-      <p class="tiny" style="margin:0 0 7px">Runs a simulation over your currently loaded database to compute, from data, what each pick-time factor is actually worth &mdash; then ranks options with those weights instead of the manual ones above. Deterministic (same DB &rarr; same result). Takes a few seconds.</p>
+      <p class="tiny" style="margin:0 0 7px">Runs a simulation over your currently loaded database to compute, from data, what each pick-time factor is actually worth &mdash; then ranks options with those weights instead of the manual ones above. Deterministic (same DB + seed &rarr; same result). Takes a few seconds.</p>
+      <label style="display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--mut);margin:0 0 6px"># drafts to simulate: <input type="number" id="calNScripts" value="150" min="1" step="1" style="width:75px;padding:3px 6px;font-size:12px;border:1px solid var(--line);border-radius:6px;background:transparent;color:var(--ink)"></label>
+      <label style="display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--mut);margin:0 0 8px">Seed (0&ndash;4294967295, blank = auto from DB): <input type="number" id="calSeed" placeholder="auto" min="0" max="4294967295" step="1" style="width:120px;padding:3px 6px;font-size:12px;border:1px solid var(--line);border-radius:6px;background:transparent;color:var(--ink)"></label>
       <button class="btn sec sm" id="calBtn" onclick="runNoHoldCalibration()">Calibrate from DB</button>
       <div id="calStatus" class="tiny" style="margin-top:7px"></div>
       <div id="calResult" style="margin-top:7px"></div>
@@ -6588,7 +6652,7 @@ function _ratingCurveFrac(rating,thr,hardBound,minFrac,maxFrac,isLow){
    fallback whenever calibration is off, absent, or stale. All hard feasibility overrides
    (urgent-position/last-pick, soleForce, out-of-formation) stay senior to any score — see
    rankAndVerdict. Nothing here touches the solver. */
-const _NOHOLD_CAL_KEY='pacwyn_nohold_cal_v2'; // v2 (v13.1): weight schema gained firstIcon/firstHero -- bump forces stale v1 blobs to be ignored rather than read in with undefined fields
+const _NOHOLD_CAL_KEY='pacwyn_nohold_cal_v3'; // v3 (v13.4): result gained an explicit `seed` field (user-choosable, defaults to DB hash as before) -- bump forces stale v2 blobs (no seed field, would misread as seed 0) to be ignored rather than read in with an undefined/wrong seed
 let NOHOLD_CAL=null; // {hash, weights, trainMean, holdMean, nScripts, K, date}
 (function restoreCal(){try{const raw=localStorage.getItem(_NOHOLD_CAL_KEY);if(!raw)return;const s=JSON.parse(raw);if(s&&s.weights)NOHOLD_CAL=s;}catch(e){}})();
 
@@ -6658,10 +6722,16 @@ function _calFeasible(db,forms,K){
 
 // Full calibration. Synchronous core (~2-4s); the caller wraps it in a please-wait box and
 // yields to the event loop first so the box paints. Returns {hash,weights,trainMean,holdMean,...}.
+// opts.seed (optional, 0..4294967295): overrides the rng seed (default: derived from the DB
+// contents via _calDbHash, as before). `hash` in the returned object is ALWAYS the DB hash --
+// that's the staleness key compared against playerDB elsewhere -- while `seed` records whichever
+// seed actually drove the rng, so a manual seed never gets mistaken for a DB change (or vice versa).
 function _calibrateNoHold(db,forms,opts){
   opts=opts||{};const K=opts.K||5,nScripts=opts.nScripts||150,nVec=opts.nVec||600;
   const feasErr=_calFeasible(db,forms,K);if(feasErr)return{error:feasErr};
-  const hash=_calDbHash(db);const rng=_calRng(hash);
+  const hash=_calDbHash(db);
+  const seed=(opts.seed!=null&&!isNaN(opts.seed))?(Math.min(4294967295,Math.max(0,Math.floor(opts.seed)))>>>0):hash;
+  const rng=_calRng(seed);
   const scripts=_calMakeScripts(db,forms,nScripts,K,rng);
   if(scripts.length<20)return{error:'Could not build enough valid draft scenarios from this DB.'};
   const nTrain=Math.floor(scripts.length*0.7);
@@ -6675,17 +6745,91 @@ function _calibrateNoHold(db,forms,opts){
   const dims=['newNat','newClub','newLg','prem','clash','iconHero','firstIcon','firstHero'];
   let improved=true,cur=bestV;
   while(improved){improved=false;for(const d of dims){for(const step of[1,-1,0.5,-0.5,0.2,-0.2]){const w2={...best,[d]:best[d]+step};const m=_calMean(train,_calMakeScorer(w2));if(m>cur+1e-9){cur=m;best=w2;improved=true;}}}}
-  return{hash,weights:best,trainMean:cur,holdMean:_calMean(hold,_calMakeScorer(best)),nScripts:scripts.length,K,date:new Date().toISOString().slice(0,10)};
+  return{hash,seed,weights:best,trainMean:cur,holdMean:_calMean(hold,_calMakeScorer(best)),nScripts:scripts.length,K,date:new Date().toISOString().slice(0,10)};
 }
 
 // Is the calibrated no-hold path currently the ACTIVE ranking source?
 function _calActive(){return noHoldOn()&&NOHOLD_CAL&&NOHOLD_CAL.weights&&NOHOLD_CAL.hash===_calDbHash(playerDB);}
 
+// v13.4.1: async/chunked twin of _calibrateNoHold, used ONLY when nScripts>1000 (the same
+// threshold that triggers the "this may take minutes" confirm). Deliberately kept as a SEPARATE
+// function rather than folding chunking into _calibrateNoHold itself, so the well-tested <=1000
+// synchronous path (the overwhelming majority of real usage) is completely unchanged and unaffected
+// if this one has an issue. Identical algorithm, identical rng consumption order/values (scoreXI/
+// leagueOf are pure, and yielding to the event loop between iterations doesn't reorder or skip any
+// work) -- the only difference is periodic `await`s so a long run (large nScripts) doesn't freeze
+// the tab, at the cost of a little wall-clock overhead from the yields themselves.
+function _calYield(){return new Promise(res=>setTimeout(res,0));}
+async function _calibrateNoHoldAsync(db,forms,opts,onProgress){
+  opts=opts||{};const K=opts.K||5,nScripts=opts.nScripts||150,nVec=opts.nVec||600;
+  const feasErr=_calFeasible(db,forms,K);if(feasErr)return{error:feasErr};
+  const hash=_calDbHash(db);
+  const seed=(opts.seed!=null&&!isNaN(opts.seed))?(Math.min(4294967295,Math.max(0,Math.floor(opts.seed)))>>>0):hash;
+  const rng=_calRng(seed);
+  const scripts=_calMakeScripts(db,forms,nScripts,K,rng);
+  if(scripts.length<20)return{error:'Could not build enough valid draft scenarios from this DB.'};
+  const nTrain=Math.floor(scripts.length*0.7);
+  const train=scripts.slice(0,nTrain),hold=scripts.slice(nTrain);
+  const R=(a,b)=>a+rng()*(b-a);
+  let best=null,bestV=-Infinity;
+  let tYield=performance.now();
+  for(let v=0;v<nVec;v++){
+    const w={rating:1,newNat:R(0,4),newClub:R(0,4),newLg:R(0,4),prem:R(0,2),clash:-R(0,8),iconHero:R(-3,3),firstIcon:R(0,3),firstHero:R(0,3)};
+    const m=_calMean(train,_calMakeScorer(w));if(m>bestV){bestV=m;best=w;}
+    if(performance.now()-tYield>40){ // ~once per animation frame's worth of work, not every iteration -- keeps overhead negligible
+      if(onProgress)onProgress('Searching weight space\u2026 '+Math.round(((v+1)/nVec)*100)+'%');
+      await _calYield();
+      tYield=performance.now();
+    }
+  }
+  const dims=['newNat','newClub','newLg','prem','clash','iconHero','firstIcon','firstHero'];
+  let improved=true,cur=bestV;
+  tYield=performance.now();
+  while(improved){
+    improved=false;
+    for(const d of dims){
+      for(const step of[1,-1,0.5,-0.5,0.2,-0.2]){
+        const w2={...best,[d]:best[d]+step};const m=_calMean(train,_calMakeScorer(w2));
+        if(m>cur+1e-9){cur=m;best=w2;improved=true;}
+        if(performance.now()-tYield>40){
+          if(onProgress)onProgress('Refining weights\u2026');
+          await _calYield();
+          tYield=performance.now();
+        }
+      }
+    }
+  }
+  return{hash,seed,weights:best,trainMean:cur,holdMean:_calMean(hold,_calMakeScorer(best)),nScripts:scripts.length,K,date:new Date().toISOString().slice(0,10)};
+}
+
 // ---- UI glue ----
+// v13.4.1: starterBoost/benchPenalty (in the misc SHAPE group) are the one pair of manual weights
+// that keep having a real, visible effect even when calibrated no-hold ranking owns everything
+// else -- they're applied by a separate XI-membership adjustment AFTER ranking (see the inline
+// same-hold note in the helper), completely outside helpValue()/_calActive()'s early-return path.
+// Every other manual weight (all of hwGrid, and every other SHAPE group/misc key) is fully
+// superseded once calibrated ranking is active -- helpValue() never reaches them -- so graying
+// those out is accurate. Graying starterBoost/benchPenalty too would be misleading (implying they
+// do nothing, when they still directly change the helper's TAKE call), so this keeps just those
+// two rows live while the rest of the misc group (takeThreshold, outOfFormationPenalty,
+// allFirstBonus, allNonePenalty -- all genuinely inert here) stays grayed like before.
+const _CAL_LIVE_SHAPE_KEYS=['starterBoost','benchPenalty'];
 function _calGrayManual(on){ // disable/enable the manual weight inputs while calibrated mode owns ranking
   const grid=$('#hwGrid'); if(grid){grid.style.opacity=on?'0.4':'';grid.style.pointerEvents=on?'none':'';grid.querySelectorAll('input').forEach(i=>i.disabled=on);}
   // SHAPE advanced grids too
-  ['icon','hero','premhero','normal','clash','common','misc'].forEach(g=>{const el=$('#shapeGrid-'+g);if(el){el.style.opacity=on?'0.4':'';el.style.pointerEvents=on?'none':'';el.querySelectorAll('input').forEach(i=>i.disabled=on);}});
+  ['icon','hero','premhero','normal','clash','common'].forEach(g=>{const el=$('#shapeGrid-'+g);if(el){el.style.opacity=on?'0.4':'';el.style.pointerEvents=on?'none':'';el.querySelectorAll('input').forEach(i=>i.disabled=on);}});
+  const miscEl=$('#shapeGrid-misc');
+  if(miscEl){
+    miscEl.style.opacity='';miscEl.style.pointerEvents=''; // container itself always live; graying happens per-row below
+    miscEl.querySelectorAll('input').forEach(inp=>{
+      const k=inp.id.slice(4); // strip 'shp-'
+      const live=on&&_CAL_LIVE_SHAPE_KEYS.includes(k);
+      const dim=on&&!live;
+      inp.disabled=dim;
+      const row=inp.closest('div');
+      if(row){row.style.opacity=dim?'0.4':'';row.style.pointerEvents=dim?'none':'';}
+    });
+  }
 }
 // v13.1 fix (audit item 1): the no-hold checkbox previously had NO real persistence -- saveHW()
 // only ever serialized the HW weight object (no no-hold field in it), so the comment in
@@ -6741,33 +6885,59 @@ function _renderCalResult(){
     +'<b>icon '+_fmtW(iconHeroBias)+'</b> / <b>hero '+_fmtW(iconHeroBias)+'</b> / <b>normal '+_fmtW(premGlue)+'</b> beyond rating '
     +'&mdash; i.e. type matters far less than <b>rating + not clashing</b>. Diversity (nation/club/league) is the real driver.'
     +'</div>';
-  html+='<div class="tiny" style="margin-top:6px;color:var(--mut)">Fit: '+NOHOLD_CAL.nScripts+' scenarios, K='+NOHOLD_CAL.K+' &middot; DB '+(NOHOLD_CAL.hash>>>0).toString(16).slice(0,8)+' &middot; '+NOHOLD_CAL.date
+  html+='<div class="tiny" style="margin-top:6px;color:var(--mut)">Fit: '+NOHOLD_CAL.nScripts+' scenarios, K='+NOHOLD_CAL.K+' &middot; DB '+(NOHOLD_CAL.hash>>>0).toString(16).slice(0,8)+' &middot; seed '+(NOHOLD_CAL.seed>>>0)+' &middot; '+NOHOLD_CAL.date
     +'<br>One of several near-optimal balances (the objective is flat near the top) &mdash; treat as guidance, not exact truth.</div>';
   html+='<button class="btn gho sm" style="margin-top:7px" onclick="runNoHoldCalibration()">Recalibrate</button>';
   box.innerHTML=html;
 }
+function _calFinish(res,st,btn,t0){
+  if(res.error){
+    if(st)st.innerHTML='<span style="color:var(--warn)">\u26a0 '+res.error+'</span>';
+    if(btn)btn.disabled=false; return;
+  }
+  NOHOLD_CAL=res;
+  try{localStorage.setItem(_NOHOLD_CAL_KEY,JSON.stringify(res));}catch(e){}
+  const ms=Math.round(performance.now()-t0);
+  if(st)st.innerHTML='<span style="color:var(--good)">\u2714 Done in '+ms+' ms. Fitted on '+res.nScripts+' simulated drafts.</span>';
+  if(btn)btn.disabled=false;
+  _solveCache=null;
+  _renderCalResult();
+  _recLog&&_recLog('no-hold weights calibrated \u2014 DB '+(res.hash>>>0).toString(16).slice(0,8)+' \u00b7 nat '+res.weights.newNat.toFixed(1)+' club '+res.weights.newClub.toFixed(1)+' lg '+res.weights.newLg.toFixed(1)+' prem '+res.weights.prem.toFixed(1)+' clash '+res.weights.clash.toFixed(1)+' iconHero '+res.weights.iconHero.toFixed(1)+' 1stIcon '+res.weights.firstIcon.toFixed(1)+' 1stHero '+res.weights.firstHero.toFixed(1));
+  if(typeof judgeBoard==='function'&&$('#helpOut')&&$('#helpOut').innerHTML.trim())judgeBoard();
+  if(typeof refreshBoard==='function')try{refreshBoard();}catch(e){}
+}
 function runNoHoldCalibration(){
   const st=$('#calStatus'), btn=$('#calBtn');
+  const nEl=$('#calNScripts');
+  let nScripts=nEl?parseInt(nEl.value,10):150;
+  if(!nScripts||nScripts<1||isNaN(nScripts))nScripts=150;
+  const big=nScripts>1000;
+  if(big&&!confirm('Simulating over 1000 drafts could take minutes, and provide negligible results. Are you sure you want to search this many drafts? This may take minutes.'))return;
+  const seedEl=$('#calSeed');
+  let seed=null;
+  if(seedEl&&seedEl.value!==''){
+    seed=parseInt(seedEl.value,10);
+    if(isNaN(seed))seed=null;
+    else{seed=Math.min(4294967295,Math.max(0,seed));seedEl.value=seed;} // clamp visibly, so the box always shows what was actually used
+  }
   if(st)st.innerHTML='<span style="color:var(--mut)">\u23f3 Simulating drafts on your DB\u2026 please wait (a few seconds).</span>';
   if(btn)btn.disabled=true;
+  if(big){
+    // v13.4.1: >1000 (same threshold as the confirm above) goes through the chunked/yielding async
+    // path instead, so a long run keeps the tab responsive instead of freezing it. <=1000 (the
+    // overwhelming majority of real usage, below) is completely untouched from before this patch.
+    const t0=performance.now();
+    _calibrateNoHoldAsync(playerDB,FORMS,{nScripts:nScripts,seed:seed},function(msg){
+      if(st)st.innerHTML='<span style="color:var(--mut)">\u23f3 '+msg+'</span>';
+    }).then(function(res){_calFinish(res,st,btn,t0);})
+      .catch(function(e){if(st)st.innerHTML='<span style="color:var(--warn)">\u26a0 '+(e&&e.message?e.message:'Calibration failed.')+'</span>';if(btn)btn.disabled=false;});
+    return;
+  }
   // yield so the please-wait paints before the synchronous fit blocks the thread
   setTimeout(function(){
     const t0=performance.now();
-    const res=_calibrateNoHold(playerDB,FORMS,{});
-    if(res.error){
-      if(st)st.innerHTML='<span style="color:var(--warn)">\u26a0 '+res.error+'</span>';
-      if(btn)btn.disabled=false; return;
-    }
-    NOHOLD_CAL=res;
-    try{localStorage.setItem(_NOHOLD_CAL_KEY,JSON.stringify(res));}catch(e){}
-    const ms=Math.round(performance.now()-t0);
-    if(st)st.innerHTML='<span style="color:var(--good)">\u2714 Done in '+ms+' ms. Fitted on '+res.nScripts+' simulated drafts.</span>';
-    if(btn)btn.disabled=false;
-    _solveCache=null;
-    _renderCalResult();
-    _recLog&&_recLog('no-hold weights calibrated \u2014 DB '+(res.hash>>>0).toString(16).slice(0,8)+' \u00b7 nat '+res.weights.newNat.toFixed(1)+' club '+res.weights.newClub.toFixed(1)+' lg '+res.weights.newLg.toFixed(1)+' prem '+res.weights.prem.toFixed(1)+' clash '+res.weights.clash.toFixed(1)+' iconHero '+res.weights.iconHero.toFixed(1)+' 1stIcon '+res.weights.firstIcon.toFixed(1)+' 1stHero '+res.weights.firstHero.toFixed(1));
-    if(typeof judgeBoard==='function'&&$('#helpOut')&&$('#helpOut').innerHTML.trim())judgeBoard();
-    if(typeof refreshBoard==='function')try{refreshBoard();}catch(e){}
+    const res=_calibrateNoHold(playerDB,FORMS,{nScripts:nScripts,seed:seed});
+    _calFinish(res,st,btn,t0);
   },30);
 }
 // Cache the committed-board snapshot the live helper is judging against, so the calibrated scorer
@@ -7376,15 +7546,25 @@ function judgeSlotInline(preCtx){
           const starterAdjTxt=bestStarter._frac===1
             ?'a +'+boostEarned.toFixed(1)+' boost for starting'
             :'only a partial +'+boostEarned.toFixed(1)+' boost ('+bestStarter._xiNote+')';
-          // Note: this pick-phase branch only ever shows the "currently favouring" comparison.
-          // The "no picks left" overrule is handled exclusively by the end-solve block below,
-          // which checks the real end-of-draft condition instead of a stale pendingAfter value.
+          // Note: this pick-phase branch only ever shows the "currently favouring"/"currently
+          // starting" comparison. The "no picks left" overrule is handled exclusively by the
+          // end-solve block below, which checks the real end-of-draft condition instead of a
+          // stale pendingAfter value.
           // When both adjustments are exactly 0, explaining them (and then "stripping them out")
           // is redundant — skip straight to the raw-value comparison in that specific case.
           const rawValTxt=(boostEarned===0&&benchPen===0)
             ?'<b>'+esc(cardName(bestBench.c))+'</b> actually scores '+rawGap.toFixed(1)+' higher on raw card value.'
             :'Those scores include '+starterAdjTxt+' and a \u2212'+benchPen.toFixed(1)+' penalty for being benched \u2014 strip both out and <b>'+esc(cardName(bestBench.c))+'</b> actually scores '+rawGap.toFixed(1)+' higher on raw card value.';
-          inlineHoldNote='<div class="note" style="border-color:var(--cyan);margin-top:8px">\u2139 You\u2019re currently favouring <b>'+esc(cardName(bestStarter.c))+'</b> ('+bestStarter.v.toFixed(1)+') over <b>'+esc(cardName(bestBench.c))+'</b> ('+bestBench.v.toFixed(1)+') from the same hold. '+rawValTxt+' '+esc(cardName(bestStarter.c))+' fits the board as it stands, but with picks still to come '+esc(cardName(bestBench.c))+' may prove the better long-term keep. Your call which to take.</div>';
+          // "Favouring" implies the starter's own (adjusted) score is what's winning it the slot.
+          // If the starter's adjusted score is already AT OR BELOW the bench card's, it isn't being
+          // favoured by score at all — it's just what's currently sitting in the starting XI (e.g.
+          // because the board needs the position filled). Say so plainly instead of misdescribing
+          // a lower score as a preference.
+          const favouring=bestStarter.v>bestBench.v;
+          const openTxt=favouring
+            ?'favouring <b>'+esc(cardName(bestStarter.c))+'</b> ('+bestStarter.v.toFixed(1)+') over <b>'+esc(cardName(bestBench.c))+'</b> ('+bestBench.v.toFixed(1)+')'
+            :'starting <b>'+esc(cardName(bestStarter.c))+'</b> ('+bestStarter.v.toFixed(1)+'), even though it already scores at or below <b>'+esc(cardName(bestBench.c))+'</b> ('+bestBench.v.toFixed(1)+')';
+          inlineHoldNote='<div class="note" style="border-color:var(--cyan);margin-top:8px">\u2139 You\u2019re currently '+openTxt+' from the same hold. '+rawValTxt+' '+esc(cardName(bestStarter.c))+' fits the board as it stands, but with picks still to come '+esc(cardName(bestBench.c))+' may prove the better long-term keep. Your call which to take.</div>';
         }
       }
     }
