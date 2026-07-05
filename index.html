@@ -6,7 +6,7 @@
 <meta property="og:description" content="DraftSolver">
 <!-- VERSION: bump this AND the matching v-number in the <h1><span> below on every patch, however
      small — see the longer note next to the <h1> for why this matters. -->
-<title>Draft Solver v13.2.1.1-ios</title>
+<title>Draft Solver v13.3</title>
 <style>
 :root{
   --bg:#05080c; --panel:#0c131b; --panel2:#111c27; --line:#1d2c3a;
@@ -1138,6 +1138,39 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
        itself changes — and what stays safe either way (the DFS engine, and the advisory/calibration
        ranking layers on top of it). See section F.
   -->
+  <!-- v13.3 — UPGRADED OOP (EMERGENCY-FILL) SOLVER. Audit of completeOOP() (the "no legal full XI"
+       fallback that solves the coverable slots, then drops best-remaining cards out of position into
+       whatever's left) found it was only reading two of the six Advanced settings that govern the
+       main starting-XI solve — Rating Ceiling and Solver Node Cap — because it called solveBest()
+       directly instead of going through the same pipeline runSolve()/_runSolveInner() do. Fixed:
+       1. SORT ORDER, SEEDING, DIVERSITY, SKIP TIES. completeOOP's coverable-slot sub-solve now
+          sorts candidates rating/helpValue-desc, runs the same admissible _probeFloor() seed
+          (cap>2M), builds the Search-diversity plan via _diversityPlan(), and passes Skip ties via
+          _skipTies() — calling solveWithDiversity() instead of a bare solveBest(). None of this can
+          change WHICH slots end up uncoverable (that's still whatever the DFS proves has zero legal
+          XIs); it only means the in-position portion gets the same speed/quality within the same
+          node cap that a clean draft's solve would, instead of a plain, unseeded, non-diversified
+          DFS. Target score is deliberately NOT threaded through — it's defined against a full 11-man
+          final score and has no coherent meaning against a sub-form missing slots.
+       2. TIE-BREAKING NOW RESPECTS BENCH MODE + MANAGER DEPTH. Previously, if the sub-solve found
+          several tied-optimal in-position arrangements, completeOOP always took bestXIs[0] — an
+          arbitrary pick among position-equivalent ties, decided purely by search order. Added
+          _pickTieWinner() (a winner-selection-only slice of _analyzeTies, factored out so it can be
+          reused without pulling in _analyzeTies' progress-counter / partial-redo UI machinery, none
+          of which applies to this synchronous, already-capped path): when Manager depth is 0% it
+          picks the clean-+2 leader (exact rating tiebreak), same as the main solve's own depthN===0
+          branch; otherwise it runs Bench mode + true +2/+1 Manager depth analysis on the top slider-
+          selected share of ties and picks by the identical tc/plus1/rating/clean ladder _analyzeTies
+          uses. Pre-confirms the bench/manager 10M-node prompts (same pattern the existing single-tie
+          bench call in _renderEmergencyFillInner already used) since there's no UI here to show a
+          mid-computation confirm().
+       NOT changed this version (deliberately out of scope): the bench/manager-insurance panel shown
+       AFTER an emergency fill (pick-per-hold, sub suggestions) still runs a single vfast/fast/medium/
+       slow bench pass per the existing code and does not add a full +2/+1 manager sub-depth read-out
+       for the final emergency squad — the log already documents this ("sub-depth search not run on
+       emergency fills") and that line remains accurate; this version only upgrades the SOLVE that
+       picks the in-position XI, not the post-solve manager summary.
+  -->
   <!-- ================================================================================================
        FOR FUTURE MAINTAINERS — KEY REFERENCE MATERIAL (read before major solver/pick-time changes)
        ================================================================================================
@@ -1369,7 +1402,7 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
                every hand-duplicated scorer need to be rebuilt," even though the DFS engine and the
                advisory/calibration layers on top of it still don't need to change.
   -->
-  <h1 class="cap">&#11041; Draft Solver <span style="font-size:11px;opacity:.55;font-weight:400;letter-spacing:0">v13.2.1.1-ios</span></h1>
+  <h1 class="cap">&#11041; Draft Solver <span style="font-size:11px;opacity:.55;font-weight:400;letter-spacing:0">v13.3</span></h1>
   <div class="cap sub">pacwyn draft optimiser</div>
   <div style="position:absolute;right:2px;top:40px;text-align:right;font-size:10px;line-height:1.5;color:var(--mut)">Created by <b style="color:var(--ink)">Chenzo</b><br><span style="opacity:.8">Special thanks to BWFCPackfan</span></div>
 </header>
@@ -1761,22 +1794,7 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
   <button data-v="v-db"><span class="ic">&#9707;</span>DB</button>
 </div>
 
-<script id="appjs">
-/* v13.2.1.1-ios — iOS Web Worker build of 13.2.1.1 (identical solver/scoring; the whole script runs
-   in a worker under a DOM stub so long searches don't trip iOS Safari's main-thread watchdog). The
-   10M bench/manager prompts can't confirm() in a worker, so on the INITIAL solve they now auto-stop
-   at that hardcoded cap instead of asking — the warning boxes, the manager-depth note, the log and
-   the recreation steps all say so explicitly (the background solver can't show the prompt), not
-   'you chose Stop'. Explicit escalations (keep-searching / search-to-end / per-tie) dispatch
-   pre-confirmed, so they never auto-stop. Worker state ships the Rating Ceiling, node cap, target
-   score and the search-diversity settings (divPct / shuffle count) so a worker mini-solve reads the
-   exact same knobs as the main solve. Same architecture and scope as the 8.12.2-ios build: the main
-   solve pipeline (_runSolveInner) and the aggregate bench/manager reanalysis (_reanalyze) run in the
-   worker; emergency fill, manager pick, and per-tie re-analysis (_reanalyzeTie) stay main-side —
-   bounded work, seconds, same scope as every prior -ios build. If the worker dies (iOS memory kill)
-   the solve falls back to the main thread with a visible notice; if it exceeds the time limit, a
-   distinct 'iOS compatibility issue' error is shown rather than silently retrying the same doomed
-   work on the main thread. */
+<script>
 /* ============================ VERSION GATE ============================ */
 // Every patch bump (the v-number in the <h1><span>) should reset ALL saved state to defaults —
 // board, DB, helper weights, advanced shape params, and solver options — not just the board.
@@ -3534,11 +3552,25 @@ function completeOOP(form,nodeCap,ratingCeil){
 
   if(coverableIdx.length>0){
     // Build a sub-form with only the coverable slots and run the real solver on it.
+    // v13.3: this now goes through the SAME machinery a clean main solve gets -- rating-desc card
+    // order, an admissible probe-floor seed, the Search-diversity plan, and Skip ties -- via
+    // solveWithDiversity() instead of a bare solveBest() call. None of this can change WHICH slots
+    // end up uncoverable (that's still whatever the DFS proves has zero legal XIs); it only means
+    // the in-position portion gets the same speed/quality within the same node cap that a clean
+    // draft's solve would. Target score is intentionally NOT threaded through here -- it's defined
+    // against a full 11-man final score and has no coherent meaning against a sub-form missing slots.
     subForm={name:form.name,slots:coverableIdx.map(i=>slots[i])};
-    const r=solveBest(subForm,cards,cap,RC);
+    const sortedCards=cards.slice().sort((a,b)=>helpValue(b)-helpValue(a));
+    const seed=(cap>2000000)?_probeFloor(subForm,sortedCards,RC):null;
+    const r=solveWithDiversity(subForm,sortedCards,cap,RC,seed?seed.seedBest:undefined,seed?seed.seedXIs:undefined,_skipTies(),_diversityPlan());
     subCapped=!!r.capped;
     if(r.bestXIs&&r.bestXIs.length){
-      const bestXI=r.bestXIs[0].xi;
+      // v13.3: if the sub-solve found several tied-optimal in-position arrangements, break the tie
+      // the SAME way a clean solve does -- Bench mode feeding true +2/+1 Manager depth analysis
+      // (per the Advanced "Manager depth" slider), falling back to the clean +2 leader when Manager
+      // depth is off -- instead of always taking bestXIs[0], which was an arbitrary pick among
+      // position-equivalent ties.
+      const bestXI=_pickTieWinner(r.bestXIs,subForm).xi;
       coverableIdx.forEach((slotI,k)=>{pick[slotI]=bestXI[k];});
     } else {
       // Fallback: greedy partial for the coverable slots
@@ -3597,6 +3629,44 @@ function completeOOP(form,nodeCap,ratingCeil){
   }
   const full11=finalPick.every(Boolean);
   return {slots,pick:finalPick,oop:finalOop,full11,sc:finalSc,chem:finalChem,oopCount:oopSlotIdx.length,capped:subCapped||permCapped,cap,subForm};
+}
+// v13.3: winner-selection slice of _analyzeTies (see main solve, further down), factored out so
+// completeOOP's sub-solve can break ties among optimal in-position XIs the same way a clean solve
+// does, without pulling in the rest of _analyzeTies' UI-oriented machinery (per-tie progress
+// counters, the "keep searching only bench/mgr" partial-redo paths, etc.) that doesn't apply to
+// this synchronous, already-capped emergency sub-solve. Pre-confirms the bench/manager 10M-node
+// prompts (same pattern _renderEmergencyFillInner's own single-tie bench call already uses just
+// below) since there's no UI here to show a mid-computation confirm() against.
+function _pickTieWinner(bestXIs,form){
+  if(bestXIs.length===1)return bestXIs[0];
+  _benchNodeAcc=0;_slowConfirmed=true;_benchAbort=false;_benchTieIdx=1;_benchTieTotal=bestXIs.length;
+  _mgrNodeAcc=0;_mgrPromptConfirmed=true;_mgrAbort=false;_mgrTieIdx=1;_mgrTieTotal=bestXIs.length;
+  const mode=_benchMode();
+  const cleans=bestXIs.map(t=>cleanMgrCount(t.sc));
+  const depthN=_mgrDepthCount(bestXIs.length);
+  if(depthN===0){
+    // Manager depth off: same fallback as the main solve -- clean +2 leader, exact rating tiebreak.
+    let bi=0,_bx=-Infinity;const leader=Math.max.apply(null,cleans);
+    bestXIs.forEach((t,i)=>{if(cleans[i]===leader&&t.sc.ratingExact>_bx){_bx=t.sc.ratingExact;bi=i;}});
+    return bestXIs[bi];
+  }
+  const order=bestXIs.map((t,i)=>i).sort((a,b)=>cleans[b]-cleans[a]);
+  const depthIdx=order.slice(0,depthN);
+  const benchData=bestXIs.map(()=>null);
+  depthIdx.forEach(i=>{benchData[i]=computeBenchPicks(bestXIs[i],form,mode);});
+  let best=null;
+  depthIdx.forEach(i=>{
+    const an=analyzeManagerDepth(bestXIs[i],form,benchData[i].bench.map(b=>b.c));
+    if(!an||!an.analyzed)return; // aborted stubs sit out, same as the main solve
+    const tc=an.clean+an.subbed2,rx=bestXIs[i].sc.ratingExact,cl=an.clean;
+    if(!best
+      ||tc>best.tc
+      ||(tc===best.tc&&an.plus1>best.p1)
+      ||(tc===best.tc&&an.plus1===best.p1&&rx>best.rx)
+      ||(tc===best.tc&&an.plus1===best.p1&&rx===best.rx&&cl>best.cl))best={i,tc,p1:an.plus1,rx,cl};
+  });
+  const bi=best?best.i:cleans.indexOf(Math.max.apply(null,cleans));
+  return bestXIs[bi];
 }
 // Renders the emergency-fill (OOP) result for a given node cap. Pulled out of _handleSolveResult so
 // the "Keep searching" button can re-run completeOOP at 3x the cap without duplicating the markup.
@@ -3996,24 +4066,6 @@ function _foreverWarn(label,actual,cap,isHelper){
   if(isHelper)msg+='\n\nThis may take a few more seconds to finish the evaluation. Cancelling here won\u2019t undo anything \u2014 the helper will still show a rating based on whatever it already had (an earlier search, or none yet).';
   msg+='\n\nContinue anyway?';
   return msg;
-}
-// iOS Web Worker build marker (the -ios file). It's true here and in the worker (same script), but the
-// worker never renders UI, so only the main thread ever reads it. It exists so every place that would
-// otherwise say "you chose Stop at the 10M check" can instead explain the TRUTH on iOS: there is no
-// prompt to choose from in a Worker (confirm() can't run there), so the bench/manager pass auto-stops
-// at that hardcoded 10M cap. Reading "you chose Stop" for a stop you never made would be actively
-// misleading, so all four abort surfaces (two warning-box heads, the manager-depth note, the log line)
-// branch on this.
-const __IOS_BUILD=true;
-function _abortHead(kind){ // kind: 'Bench search' | 'Manager checks'
-  return __IOS_BUILD
-    ? '\u26a0 '+kind+' auto-stopped \u2014 the background solver can\u2019t show the 10M prompt on iOS, so it stops at that hardcoded cap'
-    : '\u26a0 '+kind+' stopped early \u2014 you chose Stop at the 10M check';
-}
-function _abortNote(){ // shorter inline phrasing for the manager-depth note / log line
-  return __IOS_BUILD
-    ? 'auto-stopped at the hardcoded 10M cap (the iOS background solver can\u2019t show the prompt)'
-    : 'stopped at the 10M prompt';
 }
 function runSolve(nodeCap,reuseSeed){runSolve.__reuse=!!reuseSeed;
   syncAllSlots();
@@ -4445,7 +4497,7 @@ function _miniCapWarn(which,cap,exact,nodesUsed,combosChecked,mode,unitsChecked,
   let head,exTxt='';
   if(isB){
     const A=agg||{};
-    head=A.aborted?_abortHead('Bench search'):'\u26a0 Bench search capped \u2014 per-tie budget is '+(cap/1000000)+'M nodes';
+    head=A.aborted?'\u26a0 Bench search stopped early \u2014 you chose Stop at the 10M check':'\u26a0 Bench search capped \u2014 per-tie budget is '+(cap/1000000)+'M nodes';
     const lines=[];
     if(A.passNodes){let pl='<b>Pass</b> \u2014 '+_fmtCount(A.passNodes)+' nodes across '+(A.tiesTotal||'?')+' tie'+((A.tiesTotal||0)===1?'':'s');
       if(A.tiesCapped)pl+=' \u00b7 '+A.tiesCapped+' hit the per-tie budget';
@@ -4457,7 +4509,7 @@ function _miniCapWarn(which,cap,exact,nodesUsed,combosChecked,mode,unitsChecked,
     if(lines.length)exTxt='<div class="tiny" style="margin-top:4px">'+lines.join('<br>')+'</div>';
   }else{
     const A=agg||{};
-    head=A.aborted?_abortHead('Manager checks'):'\u26a0 Manager-awareness search capped \u2014 per-tie budget is '+(cap/1000000)+'M nodes';
+    head=A.aborted?'\u26a0 Manager checks stopped early \u2014 you chose Stop at the 10M check':'\u26a0 Manager-awareness search capped \u2014 per-tie budget is '+(cap/1000000)+'M nodes';
     const lines=[];
     if(A.passNodes){let pl='<b>Pass</b> \u2014 '+_fmtCount(A.passNodes)+' nodes across '+(A.tiesTotal||'?')+' tie'+((A.tiesTotal||0)===1?'':'s');
       if(A.tiesAborted)pl+=' \u00b7 '+A.tiesAborted+' skipped after the stop';
@@ -5575,7 +5627,7 @@ function _pickPanelSuffixes(picks,holdGroups){
   const _mgrDepth=(_an&&_an.analyzed)
     ?'<div class="tiny" style="margin-top:4px;color:var(--mut)"><b>'+(_an.clean+_an.subbed2)+'</b> of '+MANAGER_DB.length+' can reach +2 ('+_an.clean+' clean'+(_an.subbed2?' \u00b7 '+_an.subbed2+' more with subs':'')+') \u00b7 '+_an.plus1+' give +1.</div>'
     :(_an&&_an.aborted)
-    ?'<div class="tiny" style="margin-top:4px;color:var(--mut)">This tie\u2019s sub-based +2 depth wasn\u2019t analysed \u2014 manager checks '+_abortNote()+'. ('+_an.clean+' clean +2s still shown above.)</div>'
+    ?'<div class="tiny" style="margin-top:4px;color:var(--mut)">This tie\u2019s sub-based +2 depth wasn\u2019t analysed \u2014 manager checks were stopped at the 10M prompt. ('+_an.clean+' clean +2s still shown above.)</div>'
     :((window._solveCtx&&window._solveCtx.analyses)?'<div class="tiny" style="margin-top:4px;color:var(--mut)">This tie wasn\u2019t analysed further for sub-based +2s.</div>':'');
   const tieNote=(r.bestXIs.length>1
     ?'<div class="tiny">'+r.bestXIs.length+' squads tie at '+sc.total+'. Default frees the most managers for +2 \u2014 this one keeps <b>'+cleanMgrs+'</b> clean of '+MANAGER_DB.length+'.</div>'
@@ -7383,7 +7435,7 @@ function refreshLog(){const el=$('#log');if(!el)return;let txt=JSON.stringify(bu
       if(bd.bench&&bd.bench.length)txt+='\n\nBench / manager insurance:\n'+bd.bench.map(b=>'  '+b.c.label+' '+b.c.rating+' '+b.c.type+' '+b.c.nation+' / '+(b.c.league||'')+(b.why?'   ['+strip(b.why)+']':'')).join('\n');
     }
     const an=ctx.analyses&&ctx.analyses[cur];
-    txt+='\n\nManagers ('+MANAGER_DB.length+' in DB): '+((an&&an.analyzed)?((an.clean+an.subbed2)+' reach +2 ('+an.clean+' clean'+(an.subbed2?', '+an.subbed2+' via a sub':'')+'), '+an.plus1+' reach +1'):(cleanMgrCount(t.sc)+' clean +2 (sub-depth not '+((an&&an.aborted)?'analysed \u2014 '+_abortNote():'run on this tier/tie')+')'));
+    txt+='\n\nManagers ('+MANAGER_DB.length+' in DB): '+((an&&an.analyzed)?((an.clean+an.subbed2)+' reach +2 ('+an.clean+' clean'+(an.subbed2?', '+an.subbed2+' via a sub':'')+'), '+an.plus1+' reach +1'):(cleanMgrCount(t.sc)+' clean +2 (sub-depth not '+((an&&an.aborted)?'analysed \u2014 stopped at the 10M prompt':'run on this tier/tie')+')'));
     const selMgrs=managers.map(m=>({m,gain:mgrGain(t.sc,m)}));
     txt+='\n\nSelected ('+selMgrs.length+'):\n'+(selMgrs.length?selMgrs.map(({m,gain})=>'  '+(m.name||'?')+' \u2014 '+m.nation+' / '+m.league+'  [+'+gain+']').join('\n'):'  none selected');
     if(selMgrs.length){
@@ -7647,234 +7699,6 @@ restoreLocal();
 try{ restoreNoHoldChk(); }catch(e){}
 // v13.0: sync no-hold calibration UI to restored state (checkbox + any saved calibration)
 try{ if(typeof onNoHoldToggle==='function'){ const _wrap=$('#noHoldCalWrap'); if(_wrap)_wrap.style.display=noHoldOn()?'block':'none'; _renderCalResult(); _calGrayManual(_calActive()); } }catch(e){}
-
-/* ===================== iOS WORKER BUILD (v13.2.1.1-ios) =====================
-   iOS Safari kills long MAIN-thread tasks (the page reloads mid-solve); worker threads are exempt.
-   Design: the worker runs THIS ENTIRE SCRIPT under a tiny DOM stub, so every function and global is
-   identical by construction -- no hand-maintained closure list to drift. Jobs are dispatched by
-   message; results come back via structured clone (Sets and BigInts survive natively).
-
-   The 10M bench/manager prompts cannot confirm() in a worker, so on the INITIAL solve an un-confirmed
-   threshold maps to the EXISTING abort semantics ("stopped early") -- but every surface that reports
-   that abort switches to iOS wording (see __IOS_BUILD / _abortHead / _abortNote): the user did not
-   choose to stop, the cap is simply hardcoded because there's nowhere to show the prompt. Because the
-   auto-stop happens inside the worker, the _recLog it fires there is discarded; the main thread
-   re-derives it from the returned analysis flags (_recLogIosAutoStops) so the recreation log still
-   records it. Explicit user escalations (keep-searching / search-to-end / per-tie) dispatch
-   PRE-CONFIRMED -- the user already answered by clicking -- so they never auto-stop.
-
-   Emergency fill, manager pick and per-tie re-analysis (_reanalyzeTie) stay on the main thread
-   (bounded work, seconds -- same scope as every prior -ios build). If the worker dies (iOS memory
-   kill) the solve falls back to the synchronous path with a visible notice; if it merely runs too
-   long, the watchdog fires a DISTINCT "iOS compatibility issue" error and does NOT retry the same
-   doomed work on the main thread (that would just reload the tab), while leaving the worker
-   re-spawnable for a smaller retry. */
-let __precompA=null;
-function __takePrecompA(){const a=__precompA;__precompA=null;return a;}
-// ---- pure compute jobs (shared code; executed inside the worker) ----
-function __jobPipeline(cap,ratingCeil,reuseSeed,seedBest,seedXIs){
-  const form=FORMS.find(f=>f.name===chosenForm),t0=performance.now();
-  const _savedForceSquad=_forceSquad,_savedSquadOverride=_squadOverride;
-  _forceSquad=true;_squadOverride=null;
-  const sortedCards=cards.slice().sort((a,b)=>helpValue(b)-helpValue(a));
-  _forceSquad=_savedForceSquad;_squadOverride=_savedSquadOverride;
-  const _tgt=_targetScore();_solveTarget=_tgt>0?_tgt:null;
-  // Seed decision mirrors the sync _runSolveInner EXACTLY, with one split: the escalation-reuse best
-  // lives on the MAIN thread's window._solveCtx (invisible here), so the main side resolves it and
-  // passes reuseSeed + that best in (seedBest/seedXIs). Target seeding and the fresh probe stay here
-  // (the probe is the expensive part we specifically want off the main thread).
-  let _seed;
-  if(_tgt>0){_seed={seedBest:_tgt-2,seedXIs:null};}
-  else if(reuseSeed&&typeof seedBest==='number'&&seedBest>=0){_seed={seedBest:seedBest,seedXIs:seedXIs||null};}
-  else{_seed=(cap>2000000)?_probeFloor(form,sortedCards,ratingCeil):null;}
-  const _divPlan=_diversityPlan();
-  const r=solveWithDiversity(form,sortedCards,cap,ratingCeil,_seed?_seed.seedBest:undefined,_seed?_seed.seedXIs:undefined,_skipTies(),_divPlan);
-  const ms=Math.round(performance.now()-t0);
-  if(_skipTies()&&r&&r.bestXIs&&r.bestXIs.length>1)r.bestXIs=[r.bestXIs[0]]; // ties intentionally skipped -> show the one optimal lineup
-  r.ubRating=maxPossibleRating(sortedCards,form); // search-independent upper bound on any legal squad's rating -- drives the RC warning (see _rcCeilWarnHTML)
-  const A=_analyzeTies(r,form);   // one analysis serves both the capped and finished branches of _handleSolveResult
-  return {r,A,ms,formName:form.name,target:_solveTarget};
-}
-function __jobAnalyze(ties,formName,opts){
-  const form=FORMS.find(f=>f.name===formName);
-  return _analyzeTies({bestXIs:ties},form,opts);
-}
-function __applyWorkerState(st){
-  cards=st.cards;managers=st.managers;chosenForm=st.chosenForm;
-  if(st.MANAGER_DB)MANAGER_DB=st.MANAGER_DB;
-  if(st.playerDB&&st.playerDB.length){playerDB=st.playerDB;}
-  rebuildRarity();
-  if(st.SHAPE)Object.assign(SHAPE,st.SHAPE);
-  if(st.HW)Object.assign(HW,st.HW);
-  if(st.FW)Object.assign(FW,st.FW);
-  _benchCap=st.benchCap;_mgrCap=st.mgrCap;
-  // rcRaw/nodeCapRaw/divPctRaw/shuffleRaw feed the worker's getRatingCeil()/getNodeCap()/_divPct()/
-  // _shuffleCount() (via __pick below) so worker mini-solves (bench/manager) and the diversity plan
-  // score on the SAME Rating Ceiling / diversity settings as the main solve -- leaving any of these
-  // unset would silently fall back to the stub's defaults instead of what the user actually has set.
-  self.__CFG={benchMode:st.benchMode,mgrDepth:st.mgrDepth,targetScore:st.targetScore||'',rcRaw:st.rcRaw,nodeCapRaw:st.nodeCapRaw,divPctRaw:st.divPctRaw,shuffleRaw:st.shuffleRaw};
-  _slowConfirmed=!!st.confirmed;_mgrPromptConfirmed=!!st.confirmed;
-  _benchAbort=false;_mgrAbort=false;_benchNodeAcc=0;_mgrNodeAcc=0;
-}
-if(typeof __IS_WORKER__!=='undefined'&&__IS_WORKER__){
-  self.onmessage=function(ev){
-    const m=ev.data;
-    try{
-      __applyWorkerState(m.state);
-      let out;
-      if(m.job==='pipeline')out=__jobPipeline(m.cap,m.ratingCeil,m.reuseSeed,m.seedBest,m.seedXIs);
-      else if(m.job==='analyze')out=__jobAnalyze(m.ties,m.formName,m.opts);
-      else throw new Error('unknown job '+m.job);
-      self.postMessage({ok:true,id:m.id,out});
-    }catch(e){self.postMessage({ok:false,id:m.id,err:String(e&&e.message||e)});}
-  };
-}else{
-// ---------------- main-thread side: worker management + entry replacements ----------------
-let __iosWorker=null,__iosJobId=0,__iosPending=null,__iosWatch=null,__iosDead=false;
-function __buildIosWorkerSrc(){
-  const app=document.getElementById('appjs').textContent;
-  const prelude='var __IS_WORKER__=true;'
-    +'var __mkEl=function(){var e={innerHTML:"",value:"",textContent:"",dataset:{},style:{},classList:{add:function(){},remove:function(){},toggle:function(){},contains:function(){return false}},appendChild:function(){},insertAdjacentHTML:function(){},setAttribute:function(){},scrollIntoView:function(){},click:function(){},addEventListener:function(){},querySelector:function(){return __mkEl()},querySelectorAll:function(){return[]},closest:function(){return __mkEl()},getBoundingClientRect:function(){return{}},getContext:function(){return null}};return e;};'
-    +'var __sinks={};self.__CFG={benchMode:"vfast",mgrDepth:"0",targetScore:"",rcRaw:"11",nodeCapRaw:"5",divPctRaw:"100",shuffleRaw:"0"};'
-    +'var __pick=function(q){if(q==="#benchMode")return{value:self.__CFG.benchMode};if(q==="#mgrDepth")return{value:self.__CFG.mgrDepth};if(q==="#targetScore")return{value:self.__CFG.targetScore};if(q==="#ratingCeilSlider")return{value:self.__CFG.rcRaw};if(q==="#nodeCapInput")return{value:self.__CFG.nodeCapRaw};if(q==="#divPctSlider")return{value:self.__CFG.divPctRaw};if(q==="#shuffleCount")return{value:self.__CFG.shuffleRaw};if(!__sinks[q])__sinks[q]=__mkEl();return __sinks[q];};'
-    +'var document={getElementById:function(){return __mkEl()},querySelector:__pick,querySelectorAll:function(){return[]},createElement:function(){return __mkEl()},addEventListener:function(){},body:__mkEl(),head:__mkEl()};'
-    +'var window=self;var localStorage={getItem:function(){return null},setItem:function(){},removeItem:function(){}};var sessionStorage=localStorage;'
-    +'var alert=function(){};var confirm=function(){return false;};var prompt=function(){return null;};'  /* un-confirmed prompts -> abort semantics */
-    +'var requestAnimationFrame=function(f){try{f&&f()}catch(e){}};var navigator={userAgent:"worker"};var location={};';
-  return prelude+'\n'+app;
-}
-function __iosState(confirmed){
-  return {cards,managers,chosenForm,MANAGER_DB,playerDB:(playerDB&&playerDB.length)?playerDB:null,
-    SHAPE,HW,FW,benchCap:_benchCap,mgrCap:_mgrCap,
-    benchMode:_benchMode(),mgrDepth:String(_mgrFrac()),targetScore:($('#targetScore')||{}).value||'',
-    rcRaw:($('#ratingCeilSlider')||{}).value,nodeCapRaw:($('#nodeCapInput')||{}).value,
-    divPctRaw:($('#divPctSlider')||{}).value,shuffleRaw:($('#shuffleCount')||{}).value,
-    confirmed:!!confirmed};
-}
-function __iosDispatch(msg,cap,onOK,onFail){
-  if(__iosDead){onFail('worker unavailable');return;}
-  try{
-    if(!__iosWorker){
-      const url=URL.createObjectURL(new Blob([__buildIosWorkerSrc()],{type:'text/javascript'}));
-      __iosWorker=new Worker(url);
-      setTimeout(()=>URL.revokeObjectURL(url),30000);   // delayed revoke: iOS can lazily fetch the blob
-      __iosWorker.onmessage=ev=>{
-        if(__iosWatch){clearTimeout(__iosWatch);__iosWatch=null;}
-        const p=__iosPending;__iosPending=null;
-        if(!p||ev.data.id!==p.id)return;
-        if(ev.data.ok)p.ok(ev.data.out);else p.fail(ev.data.err);
-      };
-      __iosWorker.onerror=e=>{                          // iOS crashed/killed the worker: permanent fallback to sync
-        if(__iosWatch){clearTimeout(__iosWatch);__iosWatch=null;}
-        __iosDead=true;const p=__iosPending;__iosPending=null;
-        try{__iosWorker.terminate();}catch(_){}
-        __iosWorker=null;if(p)p.fail('worker error: '+(e&&e.message||'died'));
-      };
-    }
-    msg.id=++__iosJobId;
-    __iosPending={id:msg.id,ok:onOK,fail:onFail};
-    // Watchdog: a "ran too long" net, NOT a search limit. Cap-aware, like every prior -ios build. On
-    // fire we drop THIS worker (so a fresh one spawns for the next, smaller job) but do NOT set
-    // __iosDead -- a timeout means "too big", not "broken", so the worker stays usable for a lighter
-    // retry.
-    const t=(cap>=1e11)?900000:(cap>50000000?600000:180000);
-    __iosWatch=setTimeout(()=>{const p=__iosPending;__iosPending=null;
-      try{__iosWorker&&__iosWorker.terminate();}catch(_){}__iosWorker=null;
-      if(p)p.fail('watchdog: worker timed out');},t);
-    __iosWorker.postMessage(msg);
-  }catch(e){onFail('worker spawn failed: '+e.message);}
-}
-function _iosFallbackHtml(){
-  return '<div class="note" style="border-color:var(--bad);margin-bottom:10px"><b>\u26a0 Background solver unavailable</b> \u2014 an iOS compatibility issue stopped the background thread, so this ran on the main thread instead. Long searches may freeze the page on iOS; keep caps modest.</div>';
-}
-function _prependIosFallbackWarning(){
-  const so=$('#solveOut');
-  if(so)so.insertAdjacentHTML('afterbegin',_iosFallbackHtml());
-}
-// One-shot banner: some fallback paths (the aggregate re-analysis) re-render #solveOut ASYNCHRONOUSLY
-// via applyTie after we'd want the notice shown, and renderSummary assigns #solveOut.innerHTML
-// wholesale (wiping anything prepended first). So instead of racing it, we stash the notice here and
-// the applyTie wrapper below re-applies it on top of whatever the render produced, exactly once.
-let __iosBanner='';
-const __sync_applyTie=applyTie;
-applyTie=function(idx){
-  __sync_applyTie(idx);
-  if(__iosBanner){const so=$('#solveOut');if(so)so.insertAdjacentHTML('afterbegin',__iosBanner);__iosBanner='';}
-};
-// Distinct from the fallback notice above: shown when the worker was ALIVE but didn't finish in time.
-// Retrying the same work synchronously would just stall (and reload) the tab, so we don't -- we tell
-// the user it's an iOS limit and to lighten the search. keep=true prepends (a re-analysis timeout,
-// where the existing result is still valid and re-rendered first); keep=false replaces (a fresh solve
-// that produced nothing).
-function _showIosTimeoutError(out,cap,keep){
-  if(!out)return;
-  const capTxt=cap>=1e12?'an uncapped \u201csearch to the end\u201d':'a '+Math.round(cap/1000000)+'M-node search';
-  const html='<div class="note" style="border-color:var(--bad);margin-bottom:10px"><b>\u26a0 iOS compatibility issue \u2014 solver timed out</b> \u2014 the background solver didn\u2019t finish in time and was stopped ('+capTxt+'). iOS Safari limits how long even a background thread may run, and a search this size can exceed it. Try a lower node cap or a faster bench-awareness setting, then solve again.</div>';
-  if(keep)out.insertAdjacentHTML('afterbegin',html);else out.innerHTML=html;
-}
-// Fold a worker-side auto-stop (the 10M prompt that couldn't confirm) into the MAIN thread's
-// recreation log. The _recLog inside _maybeSlowPrompt/_maybeMgrPrompt DID run -- but in the worker,
-// whose _recActions is discarded -- so without this the stamped lastSolve.steps would omit the very
-// thing that shaped the result. Called before _handleSolveResult stamps lastSolve.
-function _recLogIosAutoStops(A){
-  if(!A)return;
-  if(A.benchAborted||A.tiesAborted)_recLog('iOS: bench pass auto-stopped at the hardcoded 10M cap (the background solver can\u2019t show the confirm prompt)');
-  if(A.mgrTiesAborted)_recLog('iOS: manager pass auto-stopped at the hardcoded 10M cap (the background solver can\u2019t show the confirm prompt)');
-}
-// ---- entry replacements (gates stay main-side; tails replicated exactly) ----
-const __sync_runSolveInner=_runSolveInner;
-_runSolveInner=function(cap,ratingCeil,reuseSeed){
-  const out=$('#solveOut');
-  // Resolve the escalation-reuse seed here (window._solveCtx lives on the main thread) and pass it in.
-  let seedBest,seedXIs;
-  if(reuseSeed&&window._solveCtx&&window._solveCtx.r&&window._solveCtx.r.best>=0){seedBest=window._solveCtx.r.best;seedXIs=window._solveCtx.r.bestXIs;}
-  __iosDispatch({job:'pipeline',state:__iosState(false),cap,ratingCeil,reuseSeed:!!reuseSeed,seedBest,seedXIs},cap,(res)=>{
-    _solveTarget=res.target;
-    _recLogIosAutoStops(res.A);                          // BEFORE _handleSolveResult -> applyTie stamps lastSolve.steps
-    __precompA=res.A;                                    // _handleSolveResult picks this up at both call sites
-    const form=FORMS.find(f=>f.name===res.formName);
-    _hideSolverOverlay();
-    _handleSolveResult(res.r,cap,form,res.ms,out);
-  },(err)=>{
-    _hideSolverOverlay();
-    if(/watchdog/.test(err)){ _showIosTimeoutError(out,cap,false); }              // timed out: don't retry the same work on the main thread
-    else { __sync_runSolveInner(cap,ratingCeil,reuseSeed);_prependIosFallbackWarning(); } // worker unavailable: main-thread fallback THEN banner (sync render wipes #solveOut, so prepend after it)
-  });
-};
-const __sync_reanalyze=_reanalyze;
-_reanalyze=function(which,cap){
-  const ctx=window._solveCtx;if(!ctx||!ctx.ties)return;
-  const _dispatchRun=()=>{
-    _recLog((which==='bench'?'bench pass':'manager pass')+': '+_recCapTxt(cap)); // logged here so a cancelled 150M forever-warning records nothing
-    if(which==='bench')_benchCap=cap;else _mgrCap=cap;
-    _showSolverOverlay();
-    __iosDispatch({job:'analyze',state:__iosState(true),ties:ctx.ties,formName:ctx.form.name,
-      opts:{only:which,prevBenchData:ctx.benchData,prevBenchCapped:ctx.benchCapped,prevAnalyses:ctx.analyses,prevMgrCapped:ctx.mgrCapped}},cap,(A)=>{
-      ctx.analyses=A.analyses;ctx.benchData=A.benchData;ctx.benchCapped=A.benchCapped;ctx.benchAborted=A.benchAborted;ctx.tiesCapped=A.tiesCapped;ctx.tiesAborted=A.tiesAborted;ctx.tiesTotal=A.tiesTotal;ctx.benchPassNodes=A.benchPassNodes;ctx.mgrCapped=A.mgrCapped;ctx.mgrPassNodes=A.mgrPassNodes;ctx.mgrTiesAborted=A.mgrTiesAborted;ctx.benchCap=A.benchCap;ctx.mgrCap=A.mgrCap;
-      _recLogIosAutoStops(A);                              // pre-confirmed, so normally a no-op; guards on flags
-      ctx.winnerIdx=_recomputeWinnerIdx(ctx.ties,ctx.analyses);
-      if(ctx.winnerIdx!==ctx.cur)ctx.cur=ctx.winnerIdx;
-      _hideSolverOverlay();applyTie(ctx.cur);
-    },(err)=>{
-      _hideSolverOverlay();
-      if(/watchdog/.test(err)){ applyTie(ctx.cur);_showIosTimeoutError($('#solveOut'),cap,true); } // keep the still-valid result, prepend the timeout note
-      else { __iosBanner=_iosFallbackHtml();__sync_reanalyze(which,cap); }            // worker unavailable: sync path (async render) -- banner re-applied by the applyTie wrapper once it renders
-    });
-  };
-  if(cap>150000000){                                        // deep/forever: same count-warning as the main solve, but against THIS search's own count
-    const bd0=ctx.benchData&&ctx.benchData[ctx.cur],an0=ctx.analyses&&ctx.analyses[ctx.cur];
-    const exactOwn=which==='bench'
-      ?(bd0?((typeof bd0.proofCeil==='bigint'&&bd0.proofCeil>0n)?Number(bd0.proofCeil):_benchNodeEstimate(bd0.mode,bd0.nodes,bd0.combos,bd0.combosChecked,bd0.unitsChecked,bd0.unitsTotal)):null)
-      :(ctx.analyses?ctx.analyses.reduce((t,a)=>t+((a&&a.exact)?Number(a.exact):0),0)||(an0?an0.exact:null):(an0?an0.exact:null));
-    if(exactOwn!==null&&exactOwn!==undefined&&exactOwn>=150000000&&!confirm(_foreverWarn('150 million',exactOwn,cap)))return;
-    _dispatchRun();
-    return;
-  }
-  _dispatchRun();
-};
-}
-/* =================== end iOS WORKER BUILD =================== */
-
 </script>
 </body>
 </html>
