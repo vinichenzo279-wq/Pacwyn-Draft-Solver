@@ -6,7 +6,14 @@
 <meta property="og:description" content="DraftSolver">
 <!-- VERSION: bump this AND the matching v-number in the <h1><span> below on every patch, however
      small — see the longer note next to the <h1> for why this matters. -->
-<title>Draft Solver v15.1.3</title>
+<title>Draft Solver v15.1.10</title>
+<!-- ABOUT THIS APP / DATA SOURCE:
+     This tool is for PACWYN, a game that heavily parallels EA FC but is NOT FC — it uses FC's
+     real player cards as a base and adds its own exclusive cards on top. That's why FC data is a
+     useful reference for the player/manager DBs here, but should not be assumed 100% identical —
+     ratings, availability, or specific cards may diverge, and PACWYN-exclusive entries have no FC
+     equivalent at all. Keep this in mind before assuming any FC source is authoritative for this
+     app's DB. -->
 <style>
 :root{
   --bg:#05080c; --panel:#0c131b; --panel2:#111c27; --line:#1d2c3a;
@@ -135,6 +142,23 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
        number would mislabel a half-finished file as a completed vX.Y.Z build, which is worse than
        an unbumped one (that at least honestly still reads as the prior version).
 
+       BEFORE A CORE-FUNCTIONALITY CHANGE (added v15.1.3): if what you're touching affects formation/
+       slot picking, the main XI solve, bench selection, or manager choice, read section L's "THE
+       UNDERLYING DRAFT FORMAT" paragraph in the FOR FUTURE MAINTAINERS block below FIRST — it lays
+       out the actual pipeline (pick formation -> pick captain -> pick each slot, PRIMARY position
+       only -> pick the bench, any position -> draft finishes -> pick 1 of 5 managers) and which
+       parts of this app model which stage. Several past mistakes (e.g. the fillability-based
+       formation ranking in section L itself) came from conflating stages that use different rules.
+
+       DOC-ONLY EDITS STILL EACH GET THEIR OWN BUMP (added v15.1.3.1, itself a correction of the
+       v15.1.3 pass that stacked several separate doc-only edits — the OOP cross-reference, the
+       section F pointer, and this file's own "before a core-functionality change" note above —
+       under one unbumped version number). "It's just a comment/doc change" is NOT an exception to
+       the ORDERING rule above: every edit that lands, however small or textual, gets its own bump
+       once it's done. Two files both reading e.g. "v15.1.3" but differing in which of several doc
+       edits made it in defeats the entire point of the version stamp (see the opening paragraph
+       above) just as surely as an unbumped logic change would.
+
        Which number to bump (format is MAJOR.BUGFIX.TEXT, optionally .CORRECTION):
          - 1st number (MAJOR): a significant functionality change — new feature, changed behavior,
            anything that substantially alters what the app actually does. Bump this, and reset
@@ -175,6 +199,16 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
        being able to scan "which version's summary mentions touching this code path" narrows down
        the culprit far faster than bisecting blind. Keep entries short; the "why" belongs in the
        inline code comments near the change, not here.
+
+       READING ORDER FOR FUTURE MAINTAINERS (added v15.1.8): this file's version history has grown
+       long enough that reading it all, every time, is no longer the efficient way in. Skip straight
+       to the "FOR FUTURE MAINTAINERS — KEY REFERENCE MATERIAL" block (lettered sections A-N) first
+       — it holds the durable, still-relevant knowledge, kept up to date on purpose so it doesn't
+       require reading the changelog to reconstruct. Only come back to the CHANGELOG blocks below
+       (or the historical pre-v8.12 log) when you need the specific detail of one particular past
+       change — e.g. tracing exactly when/why a code path was touched, per the debugging use-case
+       the CHANGELOG CONVENTION paragraph above describes. Treat the changelog as an archive to
+       search, not a document to read start-to-finish.
   -->
   <!-- ================================================================================================
        HISTORICAL CHANGELOG — PRE-v8.12 (SUMMARIZED, for reference only)
@@ -1495,12 +1529,74 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
        — extending it there would mean converting several synchronous call sites to async for
        marginal value, given how deep a per-tie search already has to be to matter. (2) the OOP
        emergency-fill path never runs a full manager-depth analysis pass (bench sub-picks only) —
-       not because the OOP slot's filler is unknown, but because this app's card model only ever
-       represents Prem-club normal/hero/icon cards (baked in since v1.0 — Prem always dominates a
-       same-rating non-Prem normal card, so non-Prem was never modeled), and an emergency slot exists
-       precisely because no modeled card is legal there; the user's real fix may be a card the app
-       has no representation of at all, so a manager-rescue count against our own placeholder squad
-       wouldn't be honest.
+       not because the OOP slot's filler is unknown, but because of the Prem-dominance design already
+       fully analyzed in the FOR FUTURE MAINTAINERS section E/F above; the OOP comment now cross-
+       references those instead of re-deriving the "Prem always wins" reasoning from scratch, and F
+       gets a pointer back so both sides of the link are findable. Also added a pointer at the top
+       "PATCH NOTE FOR FUTURE EDITORS" block, next to the version-bump convention: before a core-
+       functionality change (formation/slot picking, main solve, bench, manager), read section L's
+       "THE UNDERLYING DRAFT FORMAT" paragraph first. The goal in all three is the same: stop a
+       future pass (AI or human) from re-verifying ground already covered.
+  -->
+  <!-- v15.1.3.1 — CORRECTION to v15.1.3: that pass made three separate doc-only edits (the OOP
+       cross-reference, the section F pointer, and the core-functionality pointer) but only bumped
+       the version once at the start, leaving them all stacked under one version number instead of
+       each getting its own — exactly the mistake the ORDERING note warns about, just applied to
+       "it's only a comment" instead of a logic change. Added a new clarification right next to it
+       (DOC-ONLY EDITS STILL EACH GET THEIR OWN BUMP) spelling that out for next time. No further
+       logic or doc content changed beyond that clarification.
+  -->
+  <!-- v15.1.4 — Documentation only, no logic changed. Added section M to the FOR FUTURE MAINTAINERS
+       block: a process convention for when an arbitrary constant (cap/range/ratio/count) should
+       become a user-facing Advanced setting instead of a fixed number — three tests (risk-free,
+       genuinely consequential, doesn't clutter the common path), with #parWorkers cited as the
+       model to follow. Not everything needs exposing; this is guidance for judging which arbitrary
+       numbers do.
+  -->
+  <!-- v15.1.5 — Documentation only, no logic changed. Clarified sections B and C of the FOR FUTURE
+       MAINTAINERS block: B's harness filenames (test1_tiered.js etc.) are the OLD harness, replaced
+       by section H's differently-named six-file set (which IS shipped, verbatim, in this document's
+       own appendix) — don't waste time searching for the old filenames anywhere. C's numbers are
+       likewise a historical record of what the OLD harness verified, not today's baseline; H's own
+       RESULTS entry is the current one. Nothing removed, only forward-pointers added so this isn't
+       re-discovered by trial and error later.
+  -->
+  <!-- v15.1.6 — Documentation only, no logic changed. Added an "ABOUT THIS APP / DATA SOURCE" note
+       right after the <title> at the very top of the file: this app is for PACWYN, which parallels
+       EA FC but is a distinct game (FC cards as a base + PACWYN-exclusive cards on top), so FC data
+       is a useful but not authoritative reference for the DBs here. Flagging this at the top since
+       it affects how the player/manager DB content should be read/trusted throughout the rest of
+       the file.
+  -->
+  <!-- v15.1.7 — Documentation only, no logic changed. Added section N to the FOR FUTURE MAINTAINERS
+       block: this DB is scoped to PACWYN 26 specifically, built during development. Flags two known,
+       accepted limitations for whoever builds a future 27 DB — (1) GOLD_DB is a temporary stand-in
+       for full-DB primary-position data, Gold-eligible players only; (2) exact-duplicate cards
+       across special editions (e.g. two identical Haaland 98 ST) collapse to one DB entry since a
+       repeat has no UI/solver significance, at the cost of slightly underrepresenting true copy
+       counts. Both are deliberately left unfixed on the 26 DB — not worth hand-patching a DB that
+       will need rebuilding from scratch for 27 anyway — but 27's DB build should capture true
+       primary position per-card from the start.
+  -->
+  <!-- v15.1.8 — Documentation only, no logic changed. Added a READING ORDER note right after the
+       CHANGELOG CONVENTION paragraph at the top: point future readers to the FOR FUTURE MAINTAINERS
+       block (sections A-N) first, since that's the kept-current, durable knowledge, and treat the
+       CHANGELOG blocks as an archive to search for specific past-change detail rather than a
+       front-to-back read. Purely a reading-efficiency note now that the changelog has grown long.
+  -->
+  <!-- v15.1.9 — Documentation only, no logic changed. Added a note to section H (FOR FUTURE
+       MAINTAINERS) after the RESULTS block: a spot-check re-run of fuzz_run_rcsens.js (171 drafts,
+       0/171 soundness mismatches, 0/171 RC-2 misses) is fully consistent with the documented
+       ~1/1,774 RC-2 miss-rate baseline, not evidence of a problem — flagged so a future small
+       spot-check with zero misses isn't mistaken for the positive control failing.
+  -->
+  <!-- v15.1.10 — Documentation only, no logic changed. Added section O to the FOR FUTURE
+       MAINTAINERS block: records a tried-and-rejected experimental per-node UB tightening
+       ("UB-N", a suffix nation-union cap on solveBest()'s pruning bound). Verified sound off-tree
+       (~800 test drafts, 0 mismatches vs. both the original solver and brute force) but produced
+       zero measurable node-count change anywhere tested, since RC+33 already carries enough slack
+       that tightening the smaller nation-diversity term never flips a prune decision. Not merged;
+       written up so this specific tightening isn't re-attempted without the reasoning in hand.
   -->
   <!-- ================================================================================================
        FOR FUTURE MAINTAINERS — KEY REFERENCE MATERIAL (read before major solver/pick-time changes)
@@ -1528,8 +1624,16 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
 
        B. SOUNDNESS-TESTING METHODOLOGY (lives in test1_tiered.js + fuzz_gendraft.js +
           bruteforce.js + random_search_verifier.js + engine.js — an external harness, none of it
-          shipped in this file). The short version, for whoever next needs to re-validate a
-          solveBest/scoreXI/maxPossibleRating change:
+          shipped in this file). SUPERSEDED (clarified v15.1.5): these five filenames are the OLD
+          harness — section H replaced all of it with a differently-named six-file set
+          (prod_solver.js/indep_brute.js/fuzz_gen.js/fuzz_run_rcsens.js/forms.json/playerDB.json),
+          which IS shipped, verbatim, in this document's own appendix (see H for exactly where).
+          Don't spend time hunting for test1_tiered.js etc. anywhere — they're not attached here
+          and aren't the current harness. B is kept below only as historical methodology context
+          (the reasoning behind the tiered ground-truth/RC-isolation approach carried forward into
+          H); its OWN numbers in section C are likewise a historical record, not today's baseline
+          — see H's own RESULTS entry for that. The short version, for whoever next needs to
+          re-validate a solveBest/scoreXI/maxPossibleRating change:
             - Ground truth escalates by draft size instead of using one method everywhere: tiny/
               small/medium drafts get an uncapped or generously time-boxed TRUE brute force
               (bruteforce.js — same hold/group-uniqueness constraint as solveBest, but literally no
@@ -1558,7 +1662,10 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
               in this file) — logged to findings_tiered.jsonl with the exact failing draft for
               reproduction via repro_finding_tiered.js.
 
-       C. THIS VERSION'S TESTED-BASELINE STATUS (v12.4.3, unchanged by v12.4.4's doc-only bump) — if
+       C. THIS VERSION'S TESTED-BASELINE STATUS (v12.4.3, unchanged by v12.4.4's doc-only bump) —
+          HISTORICAL RECORD ONLY (clarified v15.1.5): this is what section B's OLD, no-longer-
+          attached harness verified at the time. For today's actual tested-baseline status, see
+          section H's own RESULTS entry instead — don't treat the numbers below as current. If
           a future fuzzing pass finds a miss, check it against this version FIRST: does it
           reproduce here, with these exact harness
           files? If not, the likely explanation is a regression introduced by whatever changed
@@ -1733,6 +1840,13 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
                every hand-duplicated scorer need to be rebuilt," even though the DFS engine and the
                advisory/calibration layers on top of it still don't need to change.
 
+          POINTER (added v15.1.3): the emergency-fill (completeOOP) bench-picks comment — where
+          subPicks is computed just before the "No coverable slots at all" fallback — cites this
+          section (and E) as the reason it never runs a full manager-depth pass on an OOP squad.
+          If F.1 (adding non-Prem normals) is ever actually built, re-check that comment too: an OOP
+          slot's "the real fix might be an unmodeled card" reasoning goes away once non-Prem is
+          modeled, and manager-depth analysis there may become worth adding.
+
        G. CHANGELOG DISCIPLINE (added v13.4.3.1, process convention — not a code/logic entry).
           The v13.4.2-ios "PORT PASS" entry (see the -ios file's changelog) claimed four versions'
           worth of fixes (v13.3/13.4/13.4.1/13.4.2) had been ported across, written by whichever
@@ -1827,6 +1941,19 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
               analyzed above (sections C/D) and ruled out. This closes out section H's "not yet run"
               status; treat the numbers above, not the six-file description further up, as this
               version's tested-baseline status for the replacement harness.
+
+            RE-RUN SPOT-CHECK, SAMPLE-SIZE CAVEAT (added v15.1.9, doc-only): a later spot-check run
+            of fuzz_run_rcsens.js against this version — 171 drafts across all twelve regimes (3M
+            combo ceiling, 10s brute budget) — found 0/171 soundness mismatches and 0/171 RC-2
+            misses. Zero RC-2 misses at this sample size is NOT itself a red flag or a sign the
+            positive control has stopped working: the RESULTS baseline just above puts the RC-2
+            miss rate at ~1/1,774 (0.06%), so at n=171 the expected count is well under 1, and
+            seeing zero is exactly what that baseline predicts. Whoever spot-checks with a smaller,
+            quicker run in the future should weigh the result against the full 1,774-draft
+            baseline's rate before treating "0 RC-2 misses" as notable on its own — it would take a
+            sample size on the order of that baseline (or larger, repeated) before a persistently-
+            zero rate says anything about an actual change in behavior, rather than just being what
+            a ~1-in-1,774 event looks like most of the time at small n.
 
        I. ADDING A NEW DEFAULT_DB ENTRY (added v13.4.4.4, process convention — not a code/logic
           entry). Goal: make new-card entry fast and mechanical, not a source of bikeshedding.
@@ -2014,8 +2141,99 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
           positional depth for any player who's strong but never got a Gold card). Not implemented
           yet — flagged for whoever adds primary-position data entry to the DB maintenance workflow
           next.
+
+       M. PHILOSOPHY: WHEN AN ARBITRARY NUMBER SHOULD BECOME AN ADVANCED SETTING (added v15.1.4,
+          process convention — not a code/logic entry). Whenever a change introduces a genuinely
+          arbitrary constant — a cap, a range, a ratio, a count — ask whether it should be a fixed
+          number or a user-facing Advanced-tab option, using three tests together, not any one alone:
+            1. RISK-FREE: exposing it (at any value the UI allows) can't break the main function or
+               produce an invalid/nonsensical result. A slider that can only ever slow a search down
+               or speed it up, never corrupt an answer, passes; a value that could silently violate a
+               solver invariant (e.g. something the branch-and-bound proof in section F depends on)
+               does not — that stays a constant, or gets a narrower validated range, not a free knob.
+            2. GENUINELY CONSEQUENTIAL: a different value could plausibly change the actual result the
+               user sees (search depth, search speed, which tie wins, an included/excluded item) —
+               not just an internal implementation detail invisible either way. If every value in the
+               allowed range converges on the same outcome, exposing it just adds a control nobody's
+               choice ever changes.
+            3. DOESN'T CLUTTER THE COMMON PATH: it lives in Advanced settings (or similarly tucked
+               away), with a sane default so nobody who doesn't care ever has to see or think about
+               it. "Worth adding" is conditional on it staying invisible-by-default, not on making the
+               basic flow more complicated to look at.
+          #parWorkers is the model to follow, not the exception: it's a 2-64 range, not a fixed 4,
+          precisely because worker count passes all three tests (safe at any value in range, can
+          genuinely change how fast a 150M+ solve returns, and sits under an Advanced toggle most
+          users never open). The takeaway for future arbitrary constants: default to giving the user
+          the knob when all three hold, rather than silently picking a number and moving on — but
+          don't manufacture a setting where one of the three fails; not everything needs exposing,
+          and a control that can't fail, can't matter, or can't stay out of the way of the basic flow
+          is a worse choice than just picking a good constant.
+
+       N. THIS DB'S EDITION SCOPE AND TWO KNOWN, ACCEPTED LIMITATIONS (added v15.1.7). The current
+          playerDB was built during development for PACWYN 26 specifically. A future PACWYN 27
+          edition would mean building a new DB anyway (new cards, new pool), and would be a good
+          opportunity to capture more per-card data than 26's DB does — most notably a real
+          PRIMARY position field on every entry, not just Gold-eligible ones, since that's exactly
+          what section L's FUTURE WORK paragraph above says would let _buildGoldPool's workaround
+          be retired instead of scoped to a Gold-only subset.
+
+          Two limitations of the 26 DB, both known and both deliberately left as-is:
+            1. GOLD_DB is a temporary stand-in for full-DB primary-position data (see section L)
+               — it works, but only covers Gold-eligible players, not the entire live pool.
+            2. EXACT-DUPLICATE SKIP ACROSS SPECIAL EDITIONS: two cards that are identical in every
+               field that matters to this app (name, rating, position, club, nation — e.g. two
+               separate special editions both printing a 98-rated Haaland at ST) collapse to one
+               DB entry rather than being stored twice, since a second identical row has no UI or
+               solver significance — every solve behaves exactly the same whether it's counted once
+               or twice. The only cost is that the DB then slightly underrepresents how many actual
+               copies of that card exist across editions, which is cosmetic, not a solver
+               correctness issue.
+          Neither is worth fixing by hand-patching the 26 DB now — that's real effort spent on a
+          DB that's going to need rebuilding from scratch for 27 regardless. Both are flagged here
+          so whoever builds the 27 DB knows to capture primary position per-card from the start
+          (retiring GOLD_DB's role) and can decide then whether tracking true duplicate counts is
+          worth the small added complexity for that edition.
+
+       O. UB-N: A TRIED-AND-REJECTED PER-NODE NATION-CAP TIGHTENING (added v15.1.10, doc-only —
+          records a dead end in solveBest()'s per-node pruning bound, not maxPossibleRating()'s RC
+          ensemble — a different target than section J's UB-I, so a different letter-suffix
+          ("N" for nation) was used to avoid confusion with the UB-A..UB-I names already in use
+          there). MOTIVATION: solveBest()'s per-node bound assumes each of the (N-k) remaining
+          slots can independently contribute a brand-new nation to the "nations" score component,
+          i.e. up to (N-k) new nations from the suffix combined. That's provably loose whenever the
+          union of remaining slots' candidate pools spans fewer distinct nations than there are
+          remaining slots (e.g. a heavily nation-restricted draft) — no completion can add more new
+          nations than physically exist across those pools.
+          IDEA: precompute, once per solveBest() call, a static suffix aggregate distinctNatSuffix[k]
+          = the size of the union of nations across cand[order[k..N-1]] (independent of path/seenNat,
+          so O(1) to look up per node, no live Set diffing needed). At each node, subtract
+          max(0, (N-k) - distinctNatSuffix[k]) from the existing bound — a valid tightening since no
+          completion of the remaining suffix can ever exceed distinctNatSuffix[k] new nations,
+          regardless of which nations happen to already be seen higher up the tree (ignoring that
+          overlap keeps the check static/cheap at the cost of being weaker than the tightest
+          possible version).
+          SOUNDNESS: verified off-tree (prototype not in this file) against both the original
+          solver (uncapped-vs-uncapped best-score equality) and the independent brute-force oracle,
+          combined ~800 drafts across all twelve regimes including a hand-built worst case (1
+          nation across a full 9-slot pool). 0 mismatches anywhere — the tightening is valid.
+          TIGHTNESS: 0 measurable effect. Instrumented directly on the 1-nation/9-slot case: the
+          cap fired 17,885 times during a 676,981-node search, tightening the bound by as much as 7
+          at once — yet the final node count came out byte-identical to the unmodified solver, in
+          every one of the ~800 test drafts, not just this one.
+          WHY, STRUCTURALLY: this cap only ever reduces the nation-diversity portion of the bound,
+          but RC+33 (the rating ceiling plus max possible chemistry) is the dominant term and
+          typically carries enough slack on its own that shaving a few points off a smaller
+          component never brings the total bound under `best`. The nation term was never the thing
+          keeping a branch alive in these instances, so tightening it changes nothing observable —
+          consistent with the general lesson already on record elsewhere in this block (e.g.
+          section G's changelog-honesty point and section J's UB-I writeup): a provably-correct,
+          provably-sound tightening is not automatically a useful one if it targets slack that was
+          never binding. Not merged. If revisited, look for a tightening on the RC/chem side (the
+          actual dominant term) rather than the diversity side, or find an instance regime where
+          diversity, not rating, is the binding constraint on `ub` — neither of which this pass
+          identified.
   -->
-  <h1 class="cap">&#11041; Draft Solver <span style="font-size:11px;opacity:.55;font-weight:400;letter-spacing:0">v15.1.3</span></h1>
+  <h1 class="cap">&#11041; Draft Solver <span style="font-size:11px;opacity:.55;font-weight:400;letter-spacing:0">v15.1.10</span></h1>
   <div class="cap sub">pacwyn draft optimiser</div>
   <div style="position:absolute;right:2px;top:40px;text-align:right;font-size:10px;line-height:1.5;color:var(--mut)">Created by <b style="color:var(--ink)">Chenzo</b><br><span style="opacity:.8">Special thanks to BWFCPackfan</span></div>
 </header>
@@ -4497,17 +4715,14 @@ function _renderEmergencyFillInner(form,cap){
       const bd=computeBenchPicks(tie,em.subForm,_benchMode());
       subPicks=bd.subPicks;benchCapped=!!bd.capped;
       // v15.1.3 (documentation only): intentionally NO analyzeManagerDepth() pass here — only bench
-      // sub-picks. This isn't an oversight (see the earlier _pickTieWinner discussion), and it isn't
-      // really about the OOP slot's card being "unknown" either. The deeper reason: this app's whole
-      // card model only ever represents three archetypes — Prem-club normal, hero, icon (CLUBS above
-      // is Prem-only, leagueOf() hardcodes every normal card to 'England Premier League') — a design
-      // decision baked in since v1.0, because a Prem normal card always dominates a same-rating
-      // non-Prem one for this game's chemistry, so there was never a reason to model non-Prem at all.
-      // An emergency-fill slot exists precisely BECAUSE no modeled card is legal there — the real
-      // fix a user has in hand may be a card this app doesn't represent at all, so a true +2/+1
-      // manager-rescue count computed against our own placeholder squad wouldn't describe what the
-      // user can actually achieve. Running the analysis anyway would just be searching deep for an
-      // answer to a question we don't have the inputs to answer honestly.
+      // sub-picks. Not an oversight, and not really about the OOP slot's card being "unknown" either.
+      // The card model only ever represents Prem-club normal/hero/icon — the Prem-dominance design
+      // decision baked in since v1.0 (why non-Prem was never modeled) is ALREADY fully analyzed in
+      // the "FOR FUTURE MAINTAINERS" reference block above, sections E (pivot-choice research) and F
+      // (scrutiny map for adding non-Prem normals) — re-read those before re-deriving this again.
+      // The point specific to THIS path: an emergency-fill slot exists precisely because no modeled
+      // card is legal there, so the user's real fix may be a card this app has no representation of
+      // at all — a manager-rescue count against our own placeholder squad wouldn't be honest.
     } else {
       // No coverable slots at all (every position uncoverable) — nothing for the real solver to
       // scope a sub-search to, fall back to the flat rating+diversity heuristic.
