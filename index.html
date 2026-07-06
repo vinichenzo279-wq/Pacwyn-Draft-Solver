@@ -6,7 +6,7 @@
 <meta property="og:description" content="DraftSolver">
 <!-- VERSION: bump this AND the matching v-number in the <h1><span> below on every patch, however
      small — see the longer note next to the <h1> for why this matters. -->
-<title>Draft Solver v15.1.6</title>
+<title>Draft Solver v15.1.7</title>
 <!-- ABOUT THIS APP / DATA SOURCE:
      This tool is for PACWYN, a game that heavily parallels EA FC but is NOT FC — it uses FC's
      real player cards as a base and adds its own exclusive cards on top. That's why FC data is a
@@ -1558,6 +1558,16 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
        it affects how the player/manager DB content should be read/trusted throughout the rest of
        the file.
   -->
+  <!-- v15.1.7 — Documentation only, no logic changed. Added section N to the FOR FUTURE MAINTAINERS
+       block: this DB is scoped to PACWYN 26 specifically, built during development. Flags two known,
+       accepted limitations for whoever builds a future 27 DB — (1) GOLD_DB is a temporary stand-in
+       for full-DB primary-position data, Gold-eligible players only; (2) exact-duplicate cards
+       across special editions (e.g. two identical Haaland 98 ST) collapse to one DB entry since a
+       repeat has no UI/solver significance, at the cost of slightly underrepresenting true copy
+       counts. Both are deliberately left unfixed on the 26 DB — not worth hand-patching a DB that
+       will need rebuilding from scratch for 27 anyway — but 27's DB build should capture true
+       primary position per-card from the start.
+  -->
   <!-- ================================================================================================
        FOR FUTURE MAINTAINERS — KEY REFERENCE MATERIAL (read before major solver/pick-time changes)
        ================================================================================================
@@ -2115,8 +2125,33 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
           don't manufacture a setting where one of the three fails; not everything needs exposing,
           and a control that can't fail, can't matter, or can't stay out of the way of the basic flow
           is a worse choice than just picking a good constant.
+
+       N. THIS DB'S EDITION SCOPE AND TWO KNOWN, ACCEPTED LIMITATIONS (added v15.1.7). The current
+          playerDB was built during development for PACWYN 26 specifically. A future PACWYN 27
+          edition would mean building a new DB anyway (new cards, new pool), and would be a good
+          opportunity to capture more per-card data than 26's DB does — most notably a real
+          PRIMARY position field on every entry, not just Gold-eligible ones, since that's exactly
+          what section L's FUTURE WORK paragraph above says would let _buildGoldPool's workaround
+          be retired instead of scoped to a Gold-only subset.
+
+          Two limitations of the 26 DB, both known and both deliberately left as-is:
+            1. GOLD_DB is a temporary stand-in for full-DB primary-position data (see section L)
+               — it works, but only covers Gold-eligible players, not the entire live pool.
+            2. EXACT-DUPLICATE SKIP ACROSS SPECIAL EDITIONS: two cards that are identical in every
+               field that matters to this app (name, rating, position, club, nation — e.g. two
+               separate special editions both printing a 98-rated Haaland at ST) collapse to one
+               DB entry rather than being stored twice, since a second identical row has no UI or
+               solver significance — every solve behaves exactly the same whether it's counted once
+               or twice. The only cost is that the DB then slightly underrepresents how many actual
+               copies of that card exist across editions, which is cosmetic, not a solver
+               correctness issue.
+          Neither is worth fixing by hand-patching the 26 DB now — that's real effort spent on a
+          DB that's going to need rebuilding from scratch for 27 regardless. Both are flagged here
+          so whoever builds the 27 DB knows to capture primary position per-card from the start
+          (retiring GOLD_DB's role) and can decide then whether tracking true duplicate counts is
+          worth the small added complexity for that edition.
   -->
-  <h1 class="cap">&#11041; Draft Solver <span style="font-size:11px;opacity:.55;font-weight:400;letter-spacing:0">v15.1.6</span></h1>
+  <h1 class="cap">&#11041; Draft Solver <span style="font-size:11px;opacity:.55;font-weight:400;letter-spacing:0">v15.1.7</span></h1>
   <div class="cap sub">pacwyn draft optimiser</div>
   <div style="position:absolute;right:2px;top:40px;text-align:right;font-size:10px;line-height:1.5;color:var(--mut)">Created by <b style="color:var(--ink)">Chenzo</b><br><span style="opacity:.8">Special thanks to BWFCPackfan</span></div>
 </header>
