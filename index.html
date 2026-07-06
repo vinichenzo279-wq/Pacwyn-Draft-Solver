@@ -6,7 +6,7 @@
 <meta property="og:description" content="DraftSolver">
 <!-- VERSION: bump this AND the matching v-number in the <h1><span> below on every patch, however
      small — see the longer note next to the <h1> for why this matters. -->
-<title>Draft Solver v15.1.9</title>
+<title>Draft Solver v15.1.10</title>
 <!-- ABOUT THIS APP / DATA SOURCE:
      This tool is for PACWYN, a game that heavily parallels EA FC but is NOT FC — it uses FC's
      real player cards as a base and adds its own exclusive cards on top. That's why FC data is a
@@ -1590,6 +1590,14 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
        ~1/1,774 RC-2 miss-rate baseline, not evidence of a problem — flagged so a future small
        spot-check with zero misses isn't mistaken for the positive control failing.
   -->
+  <!-- v15.1.10 — Documentation only, no logic changed. Added section O to the FOR FUTURE
+       MAINTAINERS block: records a tried-and-rejected experimental per-node UB tightening
+       ("UB-N", a suffix nation-union cap on solveBest()'s pruning bound). Verified sound off-tree
+       (~800 test drafts, 0 mismatches vs. both the original solver and brute force) but produced
+       zero measurable node-count change anywhere tested, since RC+33 already carries enough slack
+       that tightening the smaller nation-diversity term never flips a prune decision. Not merged;
+       written up so this specific tightening isn't re-attempted without the reasoning in hand.
+  -->
   <!-- ================================================================================================
        FOR FUTURE MAINTAINERS — KEY REFERENCE MATERIAL (read before major solver/pick-time changes)
        ================================================================================================
@@ -2185,8 +2193,47 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
           so whoever builds the 27 DB knows to capture primary position per-card from the start
           (retiring GOLD_DB's role) and can decide then whether tracking true duplicate counts is
           worth the small added complexity for that edition.
+
+       O. UB-N: A TRIED-AND-REJECTED PER-NODE NATION-CAP TIGHTENING (added v15.1.10, doc-only —
+          records a dead end in solveBest()'s per-node pruning bound, not maxPossibleRating()'s RC
+          ensemble — a different target than section J's UB-I, so a different letter-suffix
+          ("N" for nation) was used to avoid confusion with the UB-A..UB-I names already in use
+          there). MOTIVATION: solveBest()'s per-node bound assumes each of the (N-k) remaining
+          slots can independently contribute a brand-new nation to the "nations" score component,
+          i.e. up to (N-k) new nations from the suffix combined. That's provably loose whenever the
+          union of remaining slots' candidate pools spans fewer distinct nations than there are
+          remaining slots (e.g. a heavily nation-restricted draft) — no completion can add more new
+          nations than physically exist across those pools.
+          IDEA: precompute, once per solveBest() call, a static suffix aggregate distinctNatSuffix[k]
+          = the size of the union of nations across cand[order[k..N-1]] (independent of path/seenNat,
+          so O(1) to look up per node, no live Set diffing needed). At each node, subtract
+          max(0, (N-k) - distinctNatSuffix[k]) from the existing bound — a valid tightening since no
+          completion of the remaining suffix can ever exceed distinctNatSuffix[k] new nations,
+          regardless of which nations happen to already be seen higher up the tree (ignoring that
+          overlap keeps the check static/cheap at the cost of being weaker than the tightest
+          possible version).
+          SOUNDNESS: verified off-tree (prototype not in this file) against both the original
+          solver (uncapped-vs-uncapped best-score equality) and the independent brute-force oracle,
+          combined ~800 drafts across all twelve regimes including a hand-built worst case (1
+          nation across a full 9-slot pool). 0 mismatches anywhere — the tightening is valid.
+          TIGHTNESS: 0 measurable effect. Instrumented directly on the 1-nation/9-slot case: the
+          cap fired 17,885 times during a 676,981-node search, tightening the bound by as much as 7
+          at once — yet the final node count came out byte-identical to the unmodified solver, in
+          every one of the ~800 test drafts, not just this one.
+          WHY, STRUCTURALLY: this cap only ever reduces the nation-diversity portion of the bound,
+          but RC+33 (the rating ceiling plus max possible chemistry) is the dominant term and
+          typically carries enough slack on its own that shaving a few points off a smaller
+          component never brings the total bound under `best`. The nation term was never the thing
+          keeping a branch alive in these instances, so tightening it changes nothing observable —
+          consistent with the general lesson already on record elsewhere in this block (e.g.
+          section G's changelog-honesty point and section J's UB-I writeup): a provably-correct,
+          provably-sound tightening is not automatically a useful one if it targets slack that was
+          never binding. Not merged. If revisited, look for a tightening on the RC/chem side (the
+          actual dominant term) rather than the diversity side, or find an instance regime where
+          diversity, not rating, is the binding constraint on `ub` — neither of which this pass
+          identified.
   -->
-  <h1 class="cap">&#11041; Draft Solver <span style="font-size:11px;opacity:.55;font-weight:400;letter-spacing:0">v15.1.9</span></h1>
+  <h1 class="cap">&#11041; Draft Solver <span style="font-size:11px;opacity:.55;font-weight:400;letter-spacing:0">v15.1.10</span></h1>
   <div class="cap sub">pacwyn draft optimiser</div>
   <div style="position:absolute;right:2px;top:40px;text-align:right;font-size:10px;line-height:1.5;color:var(--mut)">Created by <b style="color:var(--ink)">Chenzo</b><br><span style="opacity:.8">Special thanks to BWFCPackfan</span></div>
 </header>
