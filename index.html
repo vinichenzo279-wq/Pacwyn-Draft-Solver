@@ -6,7 +6,7 @@
 <meta property="og:description" content="DraftSolver">
 <!-- VERSION: bump this AND the matching v-number in the <h1><span> below on every patch, however
      small — see the longer note next to the <h1> for why this matters. -->
-<title>Draft Solver v15.1.8</title>
+<title>Draft Solver v15.1.9</title>
 <!-- ABOUT THIS APP / DATA SOURCE:
      This tool is for PACWYN, a game that heavily parallels EA FC but is NOT FC — it uses FC's
      real player cards as a base and adds its own exclusive cards on top. That's why FC data is a
@@ -1584,6 +1584,12 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
        CHANGELOG blocks as an archive to search for specific past-change detail rather than a
        front-to-back read. Purely a reading-efficiency note now that the changelog has grown long.
   -->
+  <!-- v15.1.9 — Documentation only, no logic changed. Added a note to section H (FOR FUTURE
+       MAINTAINERS) after the RESULTS block: a spot-check re-run of fuzz_run_rcsens.js (171 drafts,
+       0/171 soundness mismatches, 0/171 RC-2 misses) is fully consistent with the documented
+       ~1/1,774 RC-2 miss-rate baseline, not evidence of a problem — flagged so a future small
+       spot-check with zero misses isn't mistaken for the positive control failing.
+  -->
   <!-- ================================================================================================
        FOR FUTURE MAINTAINERS — KEY REFERENCE MATERIAL (read before major solver/pick-time changes)
        ================================================================================================
@@ -1928,6 +1934,19 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
               status; treat the numbers above, not the six-file description further up, as this
               version's tested-baseline status for the replacement harness.
 
+            RE-RUN SPOT-CHECK, SAMPLE-SIZE CAVEAT (added v15.1.9, doc-only): a later spot-check run
+            of fuzz_run_rcsens.js against this version — 171 drafts across all twelve regimes (3M
+            combo ceiling, 10s brute budget) — found 0/171 soundness mismatches and 0/171 RC-2
+            misses. Zero RC-2 misses at this sample size is NOT itself a red flag or a sign the
+            positive control has stopped working: the RESULTS baseline just above puts the RC-2
+            miss rate at ~1/1,774 (0.06%), so at n=171 the expected count is well under 1, and
+            seeing zero is exactly what that baseline predicts. Whoever spot-checks with a smaller,
+            quicker run in the future should weigh the result against the full 1,774-draft
+            baseline's rate before treating "0 RC-2 misses" as notable on its own — it would take a
+            sample size on the order of that baseline (or larger, repeated) before a persistently-
+            zero rate says anything about an actual change in behavior, rather than just being what
+            a ~1-in-1,774 event looks like most of the time at small n.
+
        I. ADDING A NEW DEFAULT_DB ENTRY (added v13.4.4.4, process convention — not a code/logic
           entry). Goal: make new-card entry fast and mechanical, not a source of bikeshedding.
           Rules for anyone (human or model) appending a card to DEFAULT_DB:
@@ -2167,7 +2186,7 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
           (retiring GOLD_DB's role) and can decide then whether tracking true duplicate counts is
           worth the small added complexity for that edition.
   -->
-  <h1 class="cap">&#11041; Draft Solver <span style="font-size:11px;opacity:.55;font-weight:400;letter-spacing:0">v15.1.8</span></h1>
+  <h1 class="cap">&#11041; Draft Solver <span style="font-size:11px;opacity:.55;font-weight:400;letter-spacing:0">v15.1.9</span></h1>
   <div class="cap sub">pacwyn draft optimiser</div>
   <div style="position:absolute;right:2px;top:40px;text-align:right;font-size:10px;line-height:1.5;color:var(--mut)">Created by <b style="color:var(--ink)">Chenzo</b><br><span style="opacity:.8">Special thanks to BWFCPackfan</span></div>
 </header>
