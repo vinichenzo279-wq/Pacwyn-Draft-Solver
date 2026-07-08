@@ -47,7 +47,6 @@
           - Where you got to / what the next step would be, with enough detail that a fresh session
             can pick it up without re-deriving the approach.
         Keep the note factual and terse — it is a handoff, not a summary.
-     6. Do not overthink semantic inconsistancies, numberings, details that are not worth wasting effort on. In such a large self-contained file, inconsistancies are inevitable.
      ================================================================================================ -->
 <html lang="en">
 <head>
@@ -56,7 +55,7 @@
 <meta property="og:description" content="DraftSolver">
 <!-- VERSION: bump this AND the matching v-number in the <h1><span> below on every patch, however
      small — see the longer note next to the <h1> for why this matters. -->
-<title>Draft Solver v17.8.10</title>
+<title>Draft Solver v17.8.18</title>
 <!-- ABOUT THIS APP / DATA SOURCE:
      This tool is for PACWYN, a game that heavily parallels EA FC but is NOT FC — it uses FC's
      real player cards as a base and adds its own exclusive cards on top. That's why FC data is a
@@ -4038,30 +4037,56 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
           pruning power wherever this triggers (~1/3 of the isolated test's random instances), not
           a wrong final answer.
 
-          FIX IDENTIFIED, NOT YET APPLIED ANYWHERE. Two copies of this function exist: the
-          appendix's solver_bound_tests_v2.js (tested above) and this file's own two solveBest
-          copies (identical logic, see section T). Neither is currently reachable by a real
-          solve: per section T, h2NodeBound/assignMaxSumNode/spMaxFreeBox are DEFINED in-file but
-          UNCALLED (the v16.16.0 call site is commented out, __d/r2Vec is the sole live per-node
-          bound), and the appendix script only runs standalone via `node`, never as part of the
-          page. So this bug currently costs nothing in production. It WOULD need fixing in BOTH
-          places (appendix + in-file, kept identical per whatever discipline applies when they're
-          touched) if h2NodeBound is ever revisited per section T's "do not retry without new
-          evidence" bar.
+          FIX IDENTIFIED, APPLIED, AND TESTED (v17.8.10 applied the fix; v17.8.11 adds this
+          status update after both test passes below). Two copies of this function exist: the
+          appendix's solver_bound_tests_v2.js and this file's own two solveBest copies (identical
+          logic, see section T) — BOTH were patched in v17.8.10. Neither is currently reachable by
+          a real solve: per section T, h2NodeBound/assignMaxSumNode/spMaxFreeBox are DEFINED
+          in-file but UNCALLED (the v16.16.0 call site is still commented out, __d/r2Vec is the
+          sole live per-node bound), and the appendix script only runs standalone via `node`,
+          never as part of the page. So this bug cost nothing in production before the fix either
+          — the fix is a correctness improvement to currently-dead code, not a live-behavior
+          change.
 
           THE FIX ITSELF: reject a flex candidate if it's still infeasible after clamping, i.e.
-          add `if(sumOthers+vals[flex]>freeCap+EPS)continue;` immediately after the existing
-          clamp block, before scoring it. Verified against the same 2000-trial/seed=12345 run
-          with the one-line patch applied in an off-tree copy: B drops to 0/2000 mismatches, 0
-          max gap; A/C/D unchanged (still clean). Patch is isolated to spMaxFreeBox's second loop
-          — does not touch assignMaxSumNode, dacVec, r2Vec, or h2NodeBound's composition.
+          add `if(sumOthers+v>freeCap+EPS)continue;` immediately after the existing clamp block,
+          before scoring it. Isolated to spMaxFreeBox's second loop — does not touch
+          assignMaxSumNode, dacVec, r2Vec, or h2NodeBound's composition.
 
-          ACTION FOR WHOEVER PICKS THIS UP: apply the one-line fix to the solver_bound_tests_v2.js
-          copy in the APPENDIX (and to solver_bound_tests_v3.js / any later fork, if the same
-          edge-vertex shape was carried forward — not checked yet), re-run the full harness at
-          section H's baseline scale (not just this pass's reduced 2000-trial spot-check) to
-          confirm no regression, and only then write the changelog entry that actually lands the
-          fix (per section G's discipline — this entry documents the FINDING, not a completed fix).
+          ROUND 1 -- ISOLATED COMPONENT RE-TEST AT SCALE (v17.8.11, 200,000 trials/component,
+          solver_bound_tests_v2.js, the DAC-lesson shape: check each primitive against an oracle
+          built for its own precondition before trusting any aggregate/composed number): A)
+          assignMaxSumNode 0/145,411 mismatches. B) spMaxFreeBox 0/200,000 mismatches, 0
+          soundness violations, max gap 0.000000 (was 657/2,000 = 32.9% pre-fix). C) DAC collision
+          forced to fire: R2 0 violations, H2 0 violations (DAC itself still ~7.4%, unrelated,
+          stays reverted per section H/v16.15.0). D) composed h2NodeBound, general fuzz: 0/200,000
+          violations. Fix confirmed sound at 100x the original spot-check scale, no regressions in
+          any of the four components.
+
+          ROUND 2 -- PRACTICAL USEFULNESS, REAL DFS BRANCH-AND-BOUND (v17.8.11, NOT just an
+          isolated per-node check — same shape/spirit as solver_bound_tests_v3.js's PART 2, since
+          section T's own lesson is that an isolated soundness/tightness pass is necessary but not
+          sufficient to judge whether a bound is worth shipping). Extracted the actual live
+          scoreXI/solveBest, built two copies — current code, and the same code with the v16.16.0
+          h2NodeBound call site re-enabled using this fix's now-tightened spMaxFreeBox — and ran
+          both against 840 real fuzz_gen.js drafts across all 12 regimes (70/regime), cross-
+          checking a subset against the independent brute-force oracle:
+            - node count: h2(fixed) ~= current bound, 20,849 vs 20,895 avg nodes overall (~0.2%
+              fewer); best regime was realDB at ~4.7% fewer nodes.
+            - wall-clock: h2(fixed) ~28% SLOWER overall (66.9ms vs 52.2ms avg) — the
+              assignment-DP + box-vertex enumeration cost is paid every node, and the rare
+              tightening wins don't cover it.
+            - correctness: 0/840 disagreements between the two solvers; 0/56 mismatches against
+              the independent brute-force oracle on the subset small enough to brute-check.
+
+          VERDICT: FIX IS REAL AND WORTH KEEPING (dead code should still be correct, in case it's
+          ever reused as a building block per section T), BUT DOES NOT CHANGE THE v16.16.1
+          DECISION. h2NodeBound, even with this fix, still does not clear section T's bar of
+          beating plain r2Vec/__d on BOTH node count AND wall-clock time in a real search — the
+          v16.16.1 rejection was never caused by this bug, it's the exact-assignment machinery's
+          inherent per-node cost. STAYS DISABLED. Do not re-enable the v16.16.0 call site on the
+          strength of this fix alone; section T's "do not retry without new evidence" bar is still
+          unmet.
   -->
 
   <!-- FOR FUTURE MAINTAINERS —
@@ -4209,7 +4234,101 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
        full section H baseline scale per section V's own follow-up ask (only the original
        2000-trial/seed=12345 spot-check backs this, per section V's write-up) -- re-run before
        relying on this beyond that spot-check if h2NodeBound is ever revisited. -->
-  <h1 class="cap">&#11041; Draft Solver <span style="font-size:11px;opacity:.55;font-weight:400;letter-spacing:0">v17.8.10</span></h1>
+  <!-- v17.8.11 -- DOCUMENTATION ONLY, no logic/UI/content changed. Tested the v17.8.10
+       spMaxFreeBox fix two ways and recorded the results in FOR FUTURE MAINTAINERS section V:
+       (1) isolated component re-test at 200,000 trials/component (solver_bound_tests_v2.js) --
+       spMaxFreeBox now 0/200,000 mismatches (was 657/2,000 pre-fix), A/C/D all clean, fix
+       confirmed sound at 100x the original spot-check scale. (2) practical usefulness test in a
+       real DFS branch-and-bound (not just an isolated check, per section T's own lesson that
+       isolated soundness/tightness passes aren't sufficient) -- h2NodeBound with the fixed bound
+       still ties current node counts (~0.2% fewer overall) while running ~28% SLOWER wall-clock
+       across 840 real fuzzed drafts, 0 disagreements vs the current solver or the independent
+       brute-force oracle on the checked subset. VERDICT recorded in section V: fix is real and
+       worth keeping, but does not clear section T's bar for re-enabling h2NodeBound -- stays
+       disabled. -->
+  <!-- v17.8.12 -- UI LABEL ONLY. Added "(does not work with parallel search)" to the Search
+       diversity header label: the parallel workers path partitions root candidates and each worker
+       runs plain divstatic (the worker blob hardcodes diversitySeed=undefined), so a diversity plan
+       is silently ignored whenever parallel search is on. The two are mutually-exclusive strategies;
+       the label now says so. No behavioral change. -->
+  <!-- v17.8.13 -- UI: helper-row chemistry badge now shows every axis that applies to the card's
+       type, replacing the outdated Premier-League carve-out (which hid a normal's league because
+       every normal used to be Prem). Per type: normal -> league, nation, club; icon -> nation, icon
+       count; hero -> nation, league, hero count. "icon count" / "hero count" are the card's own-type
+       stack (how many icons / heroes are committed on the board), added to slotPureCounts as a new
+       `typ` field (additive; icon/hero only, null otherwise). Display-only: chemCountBadge now reads
+       slotPureCounts directly instead of _shownCounts, so _shownCounts and _dimFreshness -- which
+       drive the all-fresh bonus / all-none penalty SCORING -- are left byte-for-byte unchanged. No
+       solver, bound, or valuation math touched. -->
+  <!-- v17.8.14 -- UI: reordered the normal-card chemistry badge to nation before league
+       (nation -> league -> club), matching the hero badge which was already nation-first. Display
+       only; no counts or scoring changed. -->
+  <!-- v17.8.15 -- OBJECTIVE WEIGHTS: added a subjective, curved RARITY BONUS to helpValue (the
+       per-card helper valuation + candidate presort; NOT the solver's XI scoreXI/bounds, which are
+       untouched). Rarer axis value (fewer cards of that league/nation/club in the live DB) earns a
+       bigger flat bonus, shaped by a steepness exponent. Per type: normal -> every axis EXCEPT the
+       current pivot's own axis (league pivot skips the league axis; nation pivot skips the nation
+       axis; club is never a pivot; no pivot set -> all three) so the pivot dimension isn't double-
+       counted against the pivot head-start/rank terms; hero -> nation + league (heroes are outside
+       pivot logic, no exception); icon -> nation only. Uses the same 1-count/DB_M fraction as
+       _clashRarity but with its OWN steepness (raritySteepness) so it's independent of the clash
+       curve. Two new tunables in the subjective squad group (Weights -> Take vs hold): rarityBonus
+       (magnitude, default 5, 0=off) and raritySteepness (curve, default 15). This is why two heroes
+       in equally-supported-looking leagues (e.g. Eredivisie vs Bundesliga) previously tied -- the
+       hero-league rarity term (commonHeroLeaguePenalty) was off and binary; this replaces it with a
+       graded, always-on-by-default measure. Placed alongside the common* terms (same manual path).
+       No solver, bound, calibration-fit, or valuation-of-XI math changed. -->
+  <!-- v17.8.16 -- BUGFIX: v17.8.15's rarity bonus was placed in helpValue's manual HW/SHAPE stack,
+       which sits AFTER the _calActive() early return -- so whenever a valid objective (no-hold)
+       calibration was active, the whole block was skipped and rarityBonus/raritySteepness had zero
+       effect, contradicting their intent (and the Weights-tab wording) as an always-on, subjective
+       post-calibration weight, same treatment as calClashHoldMitigation right above it. _calActive()
+       has been the default ranking mode whenever a valid calibration exists since v16.14.0, so this
+       silently no-op'd for most users most of the time.
+       FIX: pulled the per-card axis summation (normal -> every axis except the current pivot's own
+       axis; hero -> nation+league; icon -> nation only) out into its own function, _raritySubjTotal
+       (dropping-in the exact same logic v17.8.15 shipped, unchanged). helpValue's manual stack now
+       just calls it; and the _calActive() branch now ADDS it on top of _calMakeScorer's calibrated
+       score, exactly mirroring how holdCtx/calClashHoldMitigation is threaded into that same branch
+       -- a live, hand-set adjustment applied only at helpValue() call time, never inside the
+       calibration engine's own fit loop, so NOHOLD_CAL.weights themselves are untouched either way.
+       No solver, bound, calibration-fit, or valuation-of-XI math changed; this only restores the
+       rarity bonus to the cases it was already documented to cover. -->
+  <!-- v17.8.17 -- BUGFIX: the rarity bonus's nation/league counts were being read from NAT_COUNT/
+       LG_COUNT, which are POOLED across card types (a league's LG_COUNT is normals+heroes combined;
+       a nation's NAT_COUNT is normal+hero+icon combined) -- correct for what those maps already drove
+       (rarityNat/rarityLg's clash-probability read, isCommonNat/isCommonHeroLeague/
+       isCommonNormalLeague), but wrong for the bonus, which asks "how rare is THIS type's presence on
+       this axis", not "how rare is this axis value overall". E.g. Eredivisie with 343 normals + 45
+       heroes was scoring both normals AND heroes against 388, diluting the hero side and inflating the
+       normal side (or vice versa on a league skewed the other way).
+       FIX: added five new type-segregated maps (NAT_COUNT_NORMAL, NAT_COUNT_HERO, NAT_COUNT_ICON,
+       LG_COUNT_NORMAL, LG_COUNT_HERO), built alongside the existing pooled ones in rebuildRarity() from
+       the same per-card loop (no new pass over the DB). CLB_COUNT needed no counterpart -- only normals
+       have clubs, so it was already type-pure. _raritySubjTotal now reads its own type's map only:
+       normal -> NAT_COUNT_NORMAL/LG_COUNT_NORMAL/CLB_COUNT; hero -> NAT_COUNT_HERO/LG_COUNT_HERO; icon
+       -> NAT_COUNT_ICON. The existing pooled NAT_COUNT/LG_COUNT and everything downstream of them
+       (rarityNat, rarityLg, isCommonNat, isCommonHeroLeague, isCommonNormalLeague, dropdown ordering)
+       are untouched. No solver, bound, calibration-fit, or valuation-of-XI math changed. -->
+  <!-- v17.8.18 -- BUGFIX: the helper pivot (pacwyn_pivot_kind_v1/pacwyn_pivot_key_v1, plus the legacy
+       pacwyn_pivot_league_v1) wasn't in the VERSION GATE's reset list, so it survived every version
+       bump indefinitely instead of resetting to default like every other saved setting (board, DB,
+       helper weights, advanced shape params, solver options). Fixed: added all three pivot keys to
+       that reset list.
+       Separately, the post-reset (or genuinely first-ever) default is no longer the hardcoded literal
+       'England Premier League' left standing as the final answer -- that string only matters now as a
+       synchronous placeholder for the instant between page-parse and the startup pivot-analyzer run a
+       few lines later. A new one-shot flag, _pivotAutoDefaultPending, is set true only when NO stored
+       pivot (new-format or legacy) was found; runPivotAnalysis()'s existing startup call (v17.5.0)
+       consumes it right after computing its own ranked list and applies res[0] -- the analyzer's own
+       #1 candidate -- via setHelperPivot(), off the SAME already-computed list (no extra analyzePivots()
+       pass). On a typical DB that #1 candidate IS England Premier League, so behaviour is unchanged in
+       the common case; the difference only shows on a DB where it genuinely isn't rank 1 or doesn't
+       exist, which now pivots correctly instead of pinning a guessed literal. Flag is cleared on
+       first consumption, so a later manual "Analyze pivots from DB" click never re-overrides a pivot
+       the user has since chosen deliberately. Pivot state remains localStorage-only (no sessionStorage
+       involved, unchanged). No solver, bound, calibration-fit, or valuation-of-XI math changed. -->
+  <h1 class="cap">&#11041; Draft Solver <span style="font-size:11px;opacity:.55;font-weight:400;letter-spacing:0">v17.8.18</span></h1>
   <div class="cap sub">pacwyn draft optimiser</div>
   <div style="position:absolute;right:2px;top:40px;text-align:right;font-size:10px;line-height:1.5;color:var(--mut)">Created by <b style="color:var(--ink)">Chenzo</b><br><span style="opacity:.8">Special thanks to BWFCPackfan</span></div>
 </header>
@@ -4412,7 +4531,7 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
         <p class="tiny" style="margin:4px 0 0">Only search for squads reaching this final score (incl. manager +2). 0 = off.</p>
       </div>
       <div style="margin-top:14px">
-        <label style="font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;display:block">Search diversity &mdash; <span id="divPctLabel" style="color:var(--ink);font-weight:800">100%</span> divstatic</label>
+        <label style="font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;display:block">Search diversity &mdash; <span id="divPctLabel" style="color:var(--ink);font-weight:800">100%</span> divstatic <span style="text-transform:none;letter-spacing:0;color:var(--warn);font-weight:600">(does not work with parallel search)</span></label>
         <input type="range" id="divPctSlider" min="0" max="100" step="5" value="100" style="width:100%;margin:0 0 2px;accent-color:var(--cyan)" oninput="_updDivPctLbl()" onchange="saveAdvSettings();_solveCache=null;">
         <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--mut);margin-bottom:10px"><span>0% (all shuffle)</span><span>50 / 50</span><span>100% (all divstatic)</span></div>
         <label style="font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;display:block">Shuffle passes (0&ndash;256)</label>
@@ -4693,7 +4812,7 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
     const verKey='pacwyn_app_version';
     const prev=localStorage.getItem(verKey);
     if(prev!==cur){
-      ['pacwyn_state_v3','pacwyn_fw_v1','pacwyn_shape_v1','pacwyn_db_v1','pacwyn_adv_v1','pacwyn_hw_v1'].forEach(k=>{
+      ['pacwyn_state_v3','pacwyn_fw_v1','pacwyn_shape_v1','pacwyn_db_v1','pacwyn_adv_v1','pacwyn_hw_v1','pacwyn_pivot_kind_v1','pacwyn_pivot_key_v1','pacwyn_pivot_league_v1'].forEach(k=>{ // v17.8.18: pivot keys added — a version bump should reset the helper pivot back to default (rank 1 / England Prem) too, same as every other saved setting
         try{localStorage.removeItem(k);}catch(e){}
         try{sessionStorage.removeItem(k);}catch(e){}
       });
@@ -5060,6 +5179,15 @@ let _solveCache=null,_squadOverride=null,_urgentPos=null,_pendFactor=1; // Phase
 let _lastFullRedundant=false; // set by squadAdjust; read by XI-boost phase to suppress boost for commit-clashing cards
 let _evalingSiblings=false; // recursion guard: prevents sibling helpValue calls from triggering further sibling evals
 let NAT_RANK={},LG_RANK={},NAT_COUNT={},CLB_COUNT={},LG_COUNT={},DB_M=1; // raw card counts per nation/club/hero-league + total, from the live DB
+// v17.8.17: TYPE-SEGREGATED nation/league counts, used ONLY by the rarity bonus (_raritySubjTotal).
+// NAT_COUNT/LG_COUNT above are deliberately POOLED across types (normal+hero+icon share NAT_COUNT;
+// normal+hero share LG_COUNT) -- that pooling is correct for what they already drive (rarityNat/
+// rarityLg's clash-probability read, isCommonNat/isCommonHeroLeague/isCommonNormalLeague), since a
+// clash or "commonness" there is a real board-collision risk regardless of which type holds the
+// matching axis value. The rarity BONUS is a different question -- "how rare is this specific type's
+// presence on this axis" -- so a league with 343 normals and 45 heroes should score heroes against 45,
+// not 388, and normals against 343, not 388. CLB_COUNT needs no counterpart: only normals have clubs.
+let NAT_COUNT_NORMAL={},NAT_COUNT_HERO={},NAT_COUNT_ICON={},LG_COUNT_NORMAL={},LG_COUNT_HERO={};
 // v16.0.0: multi-league + pivot state. DB_MULTILEAGUE = the live DB actually contains a non-PL
 // NORMAL (set by rebuildRarity); until it does, every generalized branch below reproduces the old
 // all-PL behavior exactly. PIVOT_KIND/PIVOT_KEY = which league OR nation the helper's "prem" factor
@@ -5071,14 +5199,24 @@ let NAT_RANK={},LG_RANK={},NAT_COUNT={},CLB_COUNT={},LG_COUNT={},DB_M=1; // raw 
 // used by both pick-time scorer call sites that used to compare leagueOf(card)===PIVOT_LEAGUE directly.
 let DB_MULTILEAGUE=false;
 var PIVOT_KIND,PIVOT_KEY;
+// v17.8.18: one-shot flag — true only when NO stored pivot (kind+key, or legacy league-only) was
+// found in localStorage, i.e. a genuinely fresh session or one just wiped by the version gate above.
+// Consumed once by runPivotAnalysis()'s startup call: instead of trusting the hardcoded
+// 'England Premier League' fallback below as the actual final answer, it hands off to whatever the
+// analyzer itself ranks #1 (same list, no extra analyzePivots() pass) -- consistent with "the pivot
+// IS whatever ranks best", and correct even on a DB where that literal league doesn't exist/isn't
+// actually best. The hardcoded string below only matters as a synchronous placeholder until that
+// startup analysis runs a few lines later.
+let _pivotAutoDefaultPending=false;
 (function(){
   try{
     const k=localStorage.getItem('pacwyn_pivot_kind_v1'),v=localStorage.getItem('pacwyn_pivot_key_v1');
     if(k&&v){PIVOT_KIND=k;PIVOT_KEY=v;return;}
     // migrate a pre-v16.7.0 save: that key only ever held a league name.
     const legacy=localStorage.getItem('pacwyn_pivot_league_v1');
-    PIVOT_KIND='league';PIVOT_KEY=legacy||'England Premier League';
-  }catch(e){PIVOT_KIND='league';PIVOT_KEY='England Premier League';}
+    if(legacy){PIVOT_KIND='league';PIVOT_KEY=legacy;return;}
+    PIVOT_KIND='league';PIVOT_KEY='England Premier League';_pivotAutoDefaultPending=true;
+  }catch(e){PIVOT_KIND='league';PIVOT_KEY='England Premier League';_pivotAutoDefaultPending=true;}
 })();
 function setHelperPivot(kind,key){
   kind=(kind==='nation')?'nation':'league';
@@ -5182,11 +5320,11 @@ function _refreshPivotEdge(precomputedList){
 // league is the pivot's own, so every league point is real and none of the special cases fire.
 // This is the single interpreter for that question, mirroring _pivotMatches above.
 function _isPivotLeague(lg){return PIVOT_KIND==='league'&&lg===PIVOT_KEY;}
-const SHAPE_DEF={clashDraws:23,iconKeep:0.30,iconErosion:0.10,heroFull:3,heroPenalty:0.22,heroRarityRefundCap:0.6,normalFloor:0.45,normalSlope:5,clashBase:0.6,clashStack:0.50,holdSizeBase:0.30,holdDomBoost:0.40,redundancySurcharge:0.6,iconRarityRefundCap:0.6,takeThreshold:10,premHeroRatingThreshold:96,premHeroRatingCeiling:98,premHeroPenaltyFracLow:1,premHeroPenaltyFracHigh:1,premHeroPenaltyFracUrgentPos:1.0,commonNatCount:10,commonClubCount:3,commonNatPenalty:0.25,commonNatIconExtra:0,commonClubPenalty:0.5,commonHeroLeaguePenalty:0,commonHeroLeagueCount:0,commonNormalLeagueBoost:0,commonNormalLeagueCount:0,lowIconRatingThreshold:90,lowIconPenaltyMin:0.25,lowIconPenaltyMax:0.75,lowIconHardBound:85,highIconRatingThreshold:96,highIconBoostMin:0.15,highIconBoostMax:0.3,highIconHardBound:99,lowHeroRatingThreshold:0,lowHeroPenaltyMin:0,lowHeroPenaltyMax:0,lowHeroHardBound:0,highHeroRatingThreshold:96,highHeroBoostMin:0.15,highHeroBoostMax:0.3,highHeroHardBound:99,lowNormalRatingThreshold:87,lowNormalPenaltyMin:0.25,lowNormalPenaltyMax:0.75,lowNormalHardBound:75,highNormalRatingThreshold:96,highNormalBoostMin:0.25,highNormalBoostMax:0.5,highNormalHardBound:99,dominantClashGap:5,outOfFormationPenalty:10,starterBoost:8,benchPenalty:5,holdSevBase:0.4,holdSevCap:0.85,allFirstBonus:5,allNonePenalty:5,pivotHeadStart:10,pivotRankPenalty:1,pivotRankSteepness:1,calClashHoldMitigation:0.5};
+const SHAPE_DEF={clashDraws:23,iconKeep:0.30,iconErosion:0.10,heroFull:3,heroPenalty:0.22,heroRarityRefundCap:0.6,normalFloor:0.45,normalSlope:5,clashBase:0.6,clashStack:0.50,holdSizeBase:0.30,holdDomBoost:0.40,redundancySurcharge:0.6,iconRarityRefundCap:0.6,takeThreshold:10,premHeroRatingThreshold:96,premHeroRatingCeiling:98,premHeroPenaltyFracLow:1,premHeroPenaltyFracHigh:1,premHeroPenaltyFracUrgentPos:1.0,commonNatCount:10,commonClubCount:3,commonNatPenalty:0.25,commonNatIconExtra:0,commonClubPenalty:0.5,commonHeroLeaguePenalty:0,commonHeroLeagueCount:0,commonNormalLeagueBoost:0,commonNormalLeagueCount:0,lowIconRatingThreshold:90,lowIconPenaltyMin:0.25,lowIconPenaltyMax:0.75,lowIconHardBound:85,highIconRatingThreshold:96,highIconBoostMin:0.15,highIconBoostMax:0.3,highIconHardBound:99,lowHeroRatingThreshold:0,lowHeroPenaltyMin:0,lowHeroPenaltyMax:0,lowHeroHardBound:0,highHeroRatingThreshold:96,highHeroBoostMin:0.15,highHeroBoostMax:0.3,highHeroHardBound:99,lowNormalRatingThreshold:87,lowNormalPenaltyMin:0.25,lowNormalPenaltyMax:0.75,lowNormalHardBound:75,highNormalRatingThreshold:96,highNormalBoostMin:0.25,highNormalBoostMax:0.5,highNormalHardBound:99,dominantClashGap:5,outOfFormationPenalty:10,starterBoost:8,benchPenalty:5,holdSevBase:0.4,holdSevCap:0.85,allFirstBonus:5,allNonePenalty:5,pivotHeadStart:10,pivotRankPenalty:1,pivotRankSteepness:1,rarityBonus:5,raritySteepness:15,calClashHoldMitigation:0.5};
 // Inputs floored at 0 because a negative value here would flip the formula's intent (e.g. extra icons/heroes
 // getting MORE valuable instead of less). clashBase also gets a max: above 2 a mild clash can end up scoring
 // worse than a severe one (see clashBase's label below), so 2 is the point past which the slider works against itself.
-const SHAPE_BOUNDS={clashDraws:[1,100],iconKeep:[0,1],heroFull:[0,10],heroRarityRefundCap:[0,1],normalFloor:[0,1],takeThreshold:[0,20],clashBase:[0,2],clashStack:[0,2],holdSizeBase:[0,1],holdDomBoost:[0,1],heroPenalty:[0,2],normalSlope:[0.1,20],iconErosion:[0,1],iconRarityRefundCap:[0,1],redundancySurcharge:[0,2],premHeroRatingThreshold:[0,105],premHeroRatingCeiling:[0,105],premHeroPenaltyFracLow:[0,1],premHeroPenaltyFracHigh:[0,1],premHeroPenaltyFracUrgentPos:[0,1],commonNatCount:[0,30],commonClubCount:[0,20],commonNatPenalty:[0,1],commonNatIconExtra:[0,1],commonClubPenalty:[0,1],commonHeroLeaguePenalty:[0,1],commonHeroLeagueCount:[0,30],commonNormalLeagueBoost:[0,1],commonNormalLeagueCount:[0,30],lowIconRatingThreshold:[0,105],lowIconPenaltyMin:[0,1],lowIconPenaltyMax:[0,2],lowIconHardBound:[0,105],highIconRatingThreshold:[0,105],highIconBoostMin:[0,1],highIconBoostMax:[0,2],highIconHardBound:[0,105],lowHeroRatingThreshold:[0,105],lowHeroPenaltyMin:[0,1],lowHeroPenaltyMax:[0,2],lowHeroHardBound:[0,105],highHeroRatingThreshold:[0,105],highHeroBoostMin:[0,1],highHeroBoostMax:[0,2],highHeroHardBound:[0,105],lowNormalRatingThreshold:[0,105],lowNormalPenaltyMin:[0,1],lowNormalPenaltyMax:[0,2],lowNormalHardBound:[0,105],highNormalRatingThreshold:[0,105],highNormalBoostMin:[0,1],highNormalBoostMax:[0,2],highNormalHardBound:[0,105],dominantClashGap:[0,30],outOfFormationPenalty:[0,50],starterBoost:[0,30],benchPenalty:[0,30],holdSevBase:[0,2],holdSevCap:[0,2],allFirstBonus:[0,20],allNonePenalty:[0,20],pivotHeadStart:[0,50],pivotRankPenalty:[0,10],pivotRankSteepness:[0.2,2],calClashHoldMitigation:[0,1]};
+const SHAPE_BOUNDS={clashDraws:[1,100],iconKeep:[0,1],heroFull:[0,10],heroRarityRefundCap:[0,1],normalFloor:[0,1],takeThreshold:[0,20],clashBase:[0,2],clashStack:[0,2],holdSizeBase:[0,1],holdDomBoost:[0,1],heroPenalty:[0,2],normalSlope:[0.1,20],iconErosion:[0,1],iconRarityRefundCap:[0,1],redundancySurcharge:[0,2],premHeroRatingThreshold:[0,105],premHeroRatingCeiling:[0,105],premHeroPenaltyFracLow:[0,1],premHeroPenaltyFracHigh:[0,1],premHeroPenaltyFracUrgentPos:[0,1],commonNatCount:[0,30],commonClubCount:[0,20],commonNatPenalty:[0,1],commonNatIconExtra:[0,1],commonClubPenalty:[0,1],commonHeroLeaguePenalty:[0,1],commonHeroLeagueCount:[0,30],commonNormalLeagueBoost:[0,1],commonNormalLeagueCount:[0,30],lowIconRatingThreshold:[0,105],lowIconPenaltyMin:[0,1],lowIconPenaltyMax:[0,2],lowIconHardBound:[0,105],highIconRatingThreshold:[0,105],highIconBoostMin:[0,1],highIconBoostMax:[0,2],highIconHardBound:[0,105],lowHeroRatingThreshold:[0,105],lowHeroPenaltyMin:[0,1],lowHeroPenaltyMax:[0,2],lowHeroHardBound:[0,105],highHeroRatingThreshold:[0,105],highHeroBoostMin:[0,1],highHeroBoostMax:[0,2],highHeroHardBound:[0,105],lowNormalRatingThreshold:[0,105],lowNormalPenaltyMin:[0,1],lowNormalPenaltyMax:[0,2],lowNormalHardBound:[0,105],highNormalRatingThreshold:[0,105],highNormalBoostMin:[0,1],highNormalBoostMax:[0,2],highNormalHardBound:[0,105],dominantClashGap:[0,30],outOfFormationPenalty:[0,50],starterBoost:[0,30],benchPenalty:[0,30],holdSevBase:[0,2],holdSevCap:[0,2],allFirstBonus:[0,20],allNonePenalty:[0,20],pivotHeadStart:[0,50],pivotRankPenalty:[0,10],pivotRankSteepness:[0.2,2],rarityBonus:[0,30],raritySteepness:[1,60],calClashHoldMitigation:[0,1]};
 let SHAPE={...SHAPE_DEF}; // tunable: clash-draw count (rarity = P(no clash over this many random draws)) + icon/hero diminishing
 const _SHAPE_SAVE_KEY='pacwyn_shape_v1';
 function saveShapeLocal(){try{localStorage.setItem(_SHAPE_SAVE_KEY,JSON.stringify(SHAPE));}catch(e){}}
@@ -9823,10 +9961,14 @@ function rebuildRarity(){const src=playerDB.length?playerDB:DEFAULT_DB;
   DB_MULTILEAGUE=src.some(c=>c.type==='normal'&&c.league&&c.league!=='England Premier League');
   const _cw=c=>(typeof c.copies==='number'&&c.copies>0)?c.copies:1;
   DB_M=src.reduce((a,c)=>a+_cw(c),0)||1;NAT_COUNT={};CLB_COUNT={};LG_COUNT={};POS_COUNT={};
+  NAT_COUNT_NORMAL={};NAT_COUNT_HERO={};NAT_COUNT_ICON={};LG_COUNT_NORMAL={};LG_COUNT_HERO={}; // v17.8.17
   src.forEach(c=>{const w=_cw(c);NAT_COUNT[c.nation]=(NAT_COUNT[c.nation]||0)+w;
+    if(c.type==='normal'){NAT_COUNT_NORMAL[c.nation]=(NAT_COUNT_NORMAL[c.nation]||0)+w;}
+    else if(c.type==='hero'){NAT_COUNT_HERO[c.nation]=(NAT_COUNT_HERO[c.nation]||0)+w;}
+    else if(c.type==='icon'){NAT_COUNT_ICON[c.nation]=(NAT_COUNT_ICON[c.nation]||0)+w;}
     if(c.type==='normal'&&c.club)CLB_COUNT[c.club]=(CLB_COUNT[c.club]||0)+w;
-    if(c.type==='hero')LG_COUNT[c.league]=(LG_COUNT[c.league]||0)+w;
-    else if(DB_MULTILEAGUE&&c.type==='normal')LG_COUNT[leagueOf(c)]=(LG_COUNT[leagueOf(c)]||0)+w; // normals' leagues only enter rarity once the DB is genuinely multi-league, so legacy rarityLg values don't shift
+    if(c.type==='hero'){LG_COUNT[c.league]=(LG_COUNT[c.league]||0)+w;LG_COUNT_HERO[c.league]=(LG_COUNT_HERO[c.league]||0)+w;}
+    else if(DB_MULTILEAGUE&&c.type==='normal'){LG_COUNT[leagueOf(c)]=(LG_COUNT[leagueOf(c)]||0)+w;LG_COUNT_NORMAL[leagueOf(c)]=(LG_COUNT_NORMAL[leagueOf(c)]||0)+w;} // normals' leagues only enter rarity once the DB is genuinely multi-league, so legacy rarityLg values don't shift
     (c.pos||[]).forEach(p=>{POS_COUNT[p]=(POS_COUNT[p]||0)+w;});});
   NAT_RANK=_rankCommon(NAT_COUNT);LG_RANK=_rankCommon(LG_COUNT);
   reorderDropdownLists();
@@ -9898,6 +10040,31 @@ function _clashRarity(raw){return Math.pow(1-Math.min(0.999,(raw||0)/DB_M),SHAPE
 function rarityNat(n){return _clashRarity(NAT_COUNT[n]||0);} // unseen nation -> rarest
 function rarityLg(l){return _clashRarity(LG_COUNT[l]||0);}
 function clubRare(club){return _clashRarity(CLB_COUNT[club]===undefined?14:CLB_COUNT[club]);} // 0..1, rarer club (any league) = fewer cards = rarer pick
+function _raritySubjBonus(count){const frac=1-Math.min(0.999,(count||0)/DB_M);const st=SHAPE.raritySteepness!=null?SHAPE.raritySteepness:1;return (SHAPE.rarityBonus||0)*Math.pow(frac,st);} // v17.8.15: subjective curved rarity bonus (rarer axis value = bigger flat bonus); own steepness, independent of clashDraws
+// v17.8.16: pulled the per-card axis summation out of helpValue's manual stack into its own function
+// so it can ALSO be added post-calibration (see helpValue's _calActive() branch) -- v17.8.15 placed
+// this only in the manual HW/SHAPE stack, below the _calActive() early return, so it silently never
+// fired whenever a valid objective calibration was active (the now-default ranking mode per
+// v16.14.0). Fix applies it as a live, hand-set add-on at helpValue() call time in BOTH branches,
+// exactly like calClashHoldMitigation's treatment -- never inside the calibration engine's own fit
+// loop, so NOHOLD_CAL.weights themselves stay untouched. Same axis rules as before: normal -> every
+// axis except the current pivot's own axis; hero -> nation+league; icon -> nation only.
+function _raritySubjTotal(c){
+  if((SHAPE.rarityBonus||0)<=0)return 0;
+  const _pk=PIVOT_KEY?PIVOT_KIND:null;
+  let v=0;
+  if(c.type==='normal'){
+    if(_pk!=='nation')v+=_raritySubjBonus(NAT_COUNT_NORMAL[c.nation]);
+    if(_pk!=='league'&&DB_MULTILEAGUE)v+=_raritySubjBonus(LG_COUNT_NORMAL[leagueOf(c)]);
+    v+=_raritySubjBonus(CLB_COUNT[c.club]);
+  }else if(c.type==='hero'){
+    v+=_raritySubjBonus(NAT_COUNT_HERO[c.nation]);
+    v+=_raritySubjBonus(LG_COUNT_HERO[c.league]);
+  }else if(c.type==='icon'){
+    v+=_raritySubjBonus(NAT_COUNT_ICON[c.nation]);
+  }
+  return v;
+}
 function posScarceN(p){
   // Linear scarcity from live DB: rarest position (fewest cards) → 1, most common → 0.
   const entries=Object.entries(POS_COUNT||{});if(!entries.length)return 0;
@@ -10011,6 +10178,8 @@ const SHAPE_LABEL={
   pivotHeadStart:'Pivot head start \u2014 flat helper bonus for any NORMAL matching your chosen pivot. Higher = harder to justify an off-pivot card. Heroes/icons are unaffected.',
   pivotRankPenalty:'Pivot rank penalty \u2014 helper penalty for a NORMAL that does NOT match the chosen pivot, scaled by how far down the analyzer\u2019s ranked list that card\u2019s league/nation sits. Top-ranked alternatives lose very little; lower-ranked ones lose more.',
   pivotRankSteepness:'Pivot rank steepness \u2014 how much heavier the penalty gets for alternatives further down the list. 1 = even step per rank. Higher = deep alternatives punished much harder; lower = the gap between ranks matters less.',
+  rarityBonus:'Rarity bonus \u2014 extra helper value for cards on rarer league/nation/club axes (fewer cards in your DB = bigger bonus). 0 = off. Skips the pivot\u2019s own axis for normals.',
+  raritySteepness:'Rarity steepness \u2014 how sharply the bonus favours truly rare axes over merely uncommon ones. Higher = only the rarest get much; lower = flatter.',
   allFirstBonus:'Flat bonus for a card new on 2/3+ of its applicable dimensions (nation always; league for heroes; club for normals) (squad mode). 0 = off.',
   allNonePenalty:'Flat penalty for a card new on none of its applicable dimensions (nation always; league for heroes; club for normals) (squad mode). 0 = off.',
   calClashHoldMitigation:'Clash penalty softening for held cards \u2014 reduces the calibrated clash penalty when the only rival card is still held, not committed. Bigger hold = softer penalty. 0 = off. No effect with No-hold drafting checked.',
@@ -10028,7 +10197,7 @@ const SHAPE_CATEGORIES=[
     'highNormalRatingThreshold','highNormalHardBound','highNormalBoostMin','highNormalBoostMax']},
   {key:'clash',keys:['clashDraws','clashBase','clashStack','holdSizeBase','holdDomBoost','holdSevBase','holdSevCap','redundancySurcharge','dominantClashGap']},
   {key:'common',keys:['commonNatCount','commonNatPenalty','commonNatIconExtra','commonClubCount','commonClubPenalty','commonHeroLeagueCount','commonHeroLeaguePenalty','commonNormalLeagueCount','commonNormalLeagueBoost']},
-  {key:'squad',keys:['takeThreshold','starterBoost','benchPenalty','pivotHeadStart','pivotRankPenalty','pivotRankSteepness','calClashHoldMitigation']}, // v16.14.2: all take-vs-hold weights live outside Manual — none are owned by the objective calibration; v17.4.0: two stateless pivot tunables (head start for the chosen pivot, rank-based penalty for alternatives) — same bucket: hand-set judgment calls, not data-derivable, per section M/section U; vNEXT: calClashHoldMitigation joins the bucket for the same reason — it's a live, hand-set adjustment applied ONLY at helpValue() call time (never inside the calibration engine's own fit loop), so it belongs outside Manual exactly like its neighbours here
+  {key:'squad',keys:['takeThreshold','starterBoost','benchPenalty','pivotHeadStart','pivotRankPenalty','pivotRankSteepness','rarityBonus','raritySteepness','calClashHoldMitigation']}, // v16.14.2: all take-vs-hold weights live outside Manual — none are owned by the objective calibration; v17.4.0: two stateless pivot tunables (head start for the chosen pivot, rank-based penalty for alternatives) — same bucket: hand-set judgment calls, not data-derivable, per section M/section U; vNEXT: calClashHoldMitigation joins the bucket for the same reason — it's a live, hand-set adjustment applied ONLY at helpValue() call time (never inside the calibration engine's own fit loop), so it belongs outside Manual exactly like its neighbours here
   {key:'misc',keys:['outOfFormationPenalty','allFirstBonus','allNonePenalty']},
 ];
 // Flat order, derived from the categories above, kept for anything that still wants "every key in a sane order".
@@ -10800,6 +10969,17 @@ function runPivotAnalysis(){
   // completely unpopulated (defaulting every alternative to the same fallback rank). Reuses this
   // call's own `res` so there's no second analyzePivots() pass.
   if(typeof _refreshPivotEdge==='function')_refreshPivotEdge(res);
+  // v17.8.18: one-shot auto-default — consumes _pivotAutoDefaultPending (set only when no pivot was
+  // found in localStorage, i.e. fresh/just-reset session). Applies the analyzer's own #1-ranked
+  // candidate as the pivot, off this SAME already-computed `res` (no extra analyzePivots() pass),
+  // instead of leaving the hardcoded 'England Premier League' placeholder from the restore IIFE as
+  // the final answer. setHelperPivot() persists it to localStorage same as a manual pick. Runs once:
+  // the flag is cleared here, so a later manual "Analyze pivots from DB" click never re-overrides a
+  // pivot the user has since chosen deliberately.
+  if(_pivotAutoDefaultPending){
+    _pivotAutoDefaultPending=false;
+    if(res.length)setHelperPivot(res[0].kind,res[0].key);
+  }
   const ms=Math.max(1,Math.round(performance.now()-t0));
   if(!res.length){box.innerHTML='<span class="tiny" style="color:var(--mut)">No candidate reaches the 7-unit pivot threshold in this DB.</span>';return;}
   const K=getPivotTopK();
@@ -11223,7 +11403,12 @@ function helpValue(c){
       cards.forEach(x=>{if(x.hold){holdGroupSize[x.hold]=(holdGroupSize[x.hold]||0)+1;}});
       holdCtx={mitigation:SHAPE.calClashHoldMitigation,sizeOf:(cc)=>cc.hold?(holdGroupSize[cc.hold]||1):1};
     }
-    return _calMakeScorer(NOHOLD_CAL.weights)(c, src, holdCtx);
+    // v17.8.16: rarityBonus/raritySteepness are hand-set judgment calls, not data-derivable, same
+    // bucket as calClashHoldMitigation just above -- so they get added here too, as a live post-
+    // calibration adjustment, rather than only in the manual HW/SHAPE stack below (which this early
+    // return skips whenever a valid calibration is active). Never folds into NOHOLD_CAL.weights or
+    // the calibration engine's own fit loop.
+    return _calMakeScorer(NOHOLD_CAL.weights)(c, src, holdCtx)+_raritySubjTotal(c);
   }
   let v=0;
   if(c.type==='icon')v+=HW.icon;
@@ -11309,6 +11494,17 @@ function helpValue(c){
   if(SHAPE.commonNormalLeagueBoost>0&&c.type==='normal'&&isCommonNormalLeague(leagueOf(c))){
     v+=HW.normalBase*SHAPE.commonNormalLeagueBoost;
   }
+  // v17.8.15: curved rarity bonus (subjective). Rarer axis value (fewer cards in the live DB) = a
+  // bigger flat bonus, shaped by raritySteepness, summed over each APPLICABLE axis:
+  //   normal -> every axis EXCEPT the current pivot's axis (a league pivot skips league; a nation
+  //             pivot skips nation; club is never a pivot) -- the pivot dimension is already handled
+  //             by the pivot head-start/rank terms, so it's excluded here to avoid double-counting.
+  //             No pivot set -> all three axes apply.
+  //   hero   -> nation + league (heroes sit outside pivot logic entirely, so no pivot exception).
+  //   icon   -> nation only.
+  // Same 1-count/DB_M rarity fraction as _clashRarity, but with its own steepness so this curve is
+  // independent of the clash-probability curve. Same manual-path placement as the common* terms.
+  v+=_raritySubjTotal(c); // v17.8.16: now shared with the _calActive() branch above -- see that function's comment
   // Low-rated penalty: cards of a type at/below its threshold (set in Advanced) lose a fraction of their
   // base value, scaling exponentially from the type's penalty-min at the threshold down to its penalty-max
   // at the type's hard floor rating (set in Advanced too; default icon/hero: 85, normal: 75). Threshold 0 = off (hero/normal default off).
@@ -11361,7 +11557,7 @@ function rankAndVerdict(list,isCap){
 // league to clash on (nation only); heroes have no club (nation+league); normals have all three.
 function slotPureCounts(c,excludeSlotId){
   const lgKey=leagueOf(c);
-  let nat=0,lg=0,clb=0;
+  let nat=0,lg=0,clb=0,typ=0;
   (board||[]).forEach(sl=>{
     if(sl.id===excludeSlotId||sl.busted)return;
     const scs=slotCards(sl.id);
@@ -11369,8 +11565,9 @@ function slotPureCounts(c,excludeSlotId){
     if(scs.some(x=>x.nation===c.nation))nat++;
     if(c.type!=='icon'&&scs.some(x=>leagueOf(x)===lgKey))lg++;
     if(c.type==='normal'&&scs.some(x=>x.type==='normal'&&x.club===c.club))clb++;
+    if((c.type==='icon'||c.type==='hero')&&scs.some(x=>x.type===c.type))typ++; // v17.8.13: icon/hero own-type stack count (display only)
   });
-  return{nat:nat+1,lg:c.type==='icon'?null:lg+1,clb:c.type==='normal'?clb+1:null};
+  return{nat:nat+1,lg:c.type==='icon'?null:lg+1,clb:c.type==='normal'?clb+1:null,typ:(c.type==='icon'||c.type==='hero')?typ+1:null};
 }
 function _ordinal(n){const v=n%100;if(v>=11&&v<=13)return n+'th';switch(n%10){case 1:return n+'st';case 2:return n+'nd';case 3:return n+'rd';default:return n+'th';}}
 function _shownCounts(c,excludeSlotId){
@@ -11395,10 +11592,29 @@ function _dimFreshness(pc){
   return{dims,fresh,stale};
 }
 function chemCountBadge(c,excludeSlotId){
-  const pc=_shownCounts(c,excludeSlotId);
-  const bits=[_ordinal(pc.nat)+' '+c.nation];
-  if(pc.lg!=null)bits.push(_ordinal(pc.lg)+' '+c.league.replace('England ',''));
-  if(pc.clb!=null)bits.push(_ordinal(pc.clb)+' '+c.club);
+  // v17.8.13: display all chemistry axes that actually apply to the card's type, dropping the old
+  // Premier-League-normal carve-out that hid a normal's league. Per type:
+  //   normal -> league, nation, club   (its three real chem dimensions)
+  //   icon   -> nation, icon count     (icons have no league/club; their own stack is the icon count)
+  //   hero   -> nation, league, hero count
+  // Display only \u2014 slotPureCounts adds the type count additively; _shownCounts / _dimFreshness
+  // (which drive the all-fresh/all-none scoring) are deliberately left untouched.
+  const pc=slotPureCounts(c,excludeSlotId);
+  const bits=[];
+  if(c.type==='normal'){
+    bits.push(_ordinal(pc.nat)+' '+c.nation);
+    if(pc.lg!=null)bits.push(_ordinal(pc.lg)+' '+c.league.replace('England ',''));
+    if(pc.clb!=null)bits.push(_ordinal(pc.clb)+' '+c.club);
+  }else if(c.type==='icon'){
+    bits.push(_ordinal(pc.nat)+' '+c.nation);
+    if(pc.typ!=null)bits.push(_ordinal(pc.typ)+' Icon');
+  }else if(c.type==='hero'){
+    bits.push(_ordinal(pc.nat)+' '+c.nation);
+    if(pc.lg!=null)bits.push(_ordinal(pc.lg)+' '+c.league.replace('England ',''));
+    if(pc.typ!=null)bits.push(_ordinal(pc.typ)+' Hero');
+  }else{
+    bits.push(_ordinal(pc.nat)+' '+c.nation);
+  }
   return bits.join(' \u00b7 ');
 }
 // isCap: the captain slot is the very first pick, so every count is trivially "1st" on every
