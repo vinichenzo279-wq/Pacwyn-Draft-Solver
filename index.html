@@ -55,7 +55,7 @@
 <meta property="og:description" content="DraftSolver">
 <!-- VERSION: bump this AND the matching v-number in the <h1><span> below on every patch, however
      small — see the longer note next to the <h1> for why this matters. -->
-<title>Draft Solver v17.8.18</title>
+<title>Draft Solver v17.8.20</title>
 <!-- ABOUT THIS APP / DATA SOURCE:
      This tool is for PACWYN, a game that heavily parallels EA FC but is NOT FC — it uses FC's
      real player cards as a base and adds its own exclusive cards on top. That's why FC data is a
@@ -4328,7 +4328,26 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
        first consumption, so a later manual "Analyze pivots from DB" click never re-overrides a pivot
        the user has since chosen deliberately. Pivot state remains localStorage-only (no sessionStorage
        involved, unchanged). No solver, bound, calibration-fit, or valuation-of-XI math changed. -->
-  <h1 class="cap">&#11041; Draft Solver <span style="font-size:11px;opacity:.55;font-weight:400;letter-spacing:0">v17.8.18</span></h1>
+  <!-- v17.8.20 -- BUGFIX: two related defects in the pick-time coveredNow / missingNow / warning-area
+       logic, both affecting pick 12+ helper notes.
+
+       BUG 1 — coveredNow under-counted covered positions when a hold contained cards from multiple
+       missing positions (e.g. a GK card AND a CB card in the same hold, with both GK and CB absent
+       from the XI). trueGaps() treats a hold's cards as a mutually-exclusive group in its bipartite
+       matching: only one card from the group can be assigned to a formation slot, so the group
+       collectively consumes exactly ONE slot in the matching — even if individual cards in the hold
+       independently cover different missing positions. The old code read missingNow off that merged
+       matching, which would arbitrarily resolve one position and silently drop coverage of the other.
+       FIX: instead of testing the whole hold at once, each option in the hold is now tested
+       individually against cardsWithout. The positions newly covered by each single-option trial are
+       unioned into nowCoveredSet. nowCovered and missingNow are both derived from that union, so
+       every position that ANY single option here can independently fill is properly credited.
+
+       BUG 2 — in the red (nothing-here-covers-it) branch, a scaled urgency soleNote (⛔/⚠️/⏳,
+       depending on pendingAfter) and the generic `urgent` red flag could both render at the same time,
+       repeating "still missing X" twice in different words. FIX: after soleNote is set, `urgent` is
+       cleared so only the more specific, urgency-scaled note is shown. -->
+  <h1 class="cap">&#11041; Draft Solver <span style="font-size:11px;opacity:.55;font-weight:400;letter-spacing:0">v17.8.20</span></h1>
   <div class="cap sub">pacwyn draft optimiser</div>
   <div style="position:absolute;right:2px;top:40px;text-align:right;font-size:10px;line-height:1.5;color:var(--mut)">Created by <b style="color:var(--ink)">Chenzo</b><br><span style="opacity:.8">Special thanks to BWFCPackfan</span></div>
 </header>
@@ -10178,7 +10197,7 @@ const SHAPE_LABEL={
   pivotHeadStart:'Pivot head start \u2014 flat helper bonus for any NORMAL matching your chosen pivot. Higher = harder to justify an off-pivot card. Heroes/icons are unaffected.',
   pivotRankPenalty:'Pivot rank penalty \u2014 helper penalty for a NORMAL that does NOT match the chosen pivot, scaled by how far down the analyzer\u2019s ranked list that card\u2019s league/nation sits. Top-ranked alternatives lose very little; lower-ranked ones lose more.',
   pivotRankSteepness:'Pivot rank steepness \u2014 how much heavier the penalty gets for alternatives further down the list. 1 = even step per rank. Higher = deep alternatives punished much harder; lower = the gap between ranks matters less.',
-  rarityBonus:'Rarity bonus \u2014 extra helper value for cards on rarer league/nation/club axes (fewer cards in your DB = bigger bonus). 0 = off. Skips the pivot\u2019s own axis for normals.',
+  rarityBonus:'Rarity bonus \u2014 extra helper value for cards on rarer league/nation/club axes (fewer cards in your DB = bigger bonus). Subjective. 0 = off. Skips the pivot\u2019s own axis for normals.',
   raritySteepness:'Rarity steepness \u2014 how sharply the bonus favours truly rare axes over merely uncommon ones. Higher = only the rarest get much; lower = flatter.',
   allFirstBonus:'Flat bonus for a card new on 2/3+ of its applicable dimensions (nation always; league for heroes; club for normals) (squad mode). 0 = off.',
   allNonePenalty:'Flat penalty for a card new on none of its applicable dimensions (nation always; league for heroes; club for normals) (squad mode). 0 = off.',
@@ -11832,10 +11851,24 @@ function judgeSlotInline(preCtx){
       // What's missing WITHOUT this pick's cards?
       const cardsWithout=cards.filter(c=>c.slot!==s.id);
       const missingBefore=[...new Set(trueGaps(form.slots,cardsWithout))];
-      // What's still missing WITH this pick's cards included?
-      const missingNow=[...new Set(trueGaps(form.slots,cards))];
-      // What did this pick newly cover?
-      const nowCovered=missingBefore.filter(p=>!missingNow.includes(p));
+      // What did this pick newly cover? v17.8.20: test EACH option on its own, one at a
+      // time, rather than reading missing gaps off the whole hold merged together. A hold's
+      // cards form a single mutually-exclusive group in trueGaps' matching (only one of them
+      // will ever actually be kept), so that matching can only ever resolve ONE formSlot per
+      // hold even when its cards' positions cover several genuinely-missing positions at once
+      // (e.g. a GK card + a CB card in the same hold, with both GK and CB missing elsewhere —
+      // the matching arbitrarily picks one slot for the merged group and the other position's
+      // cover silently vanishes). Testing each option individually and unioning the results
+      // credits every position that SOME option in this hold can independently cover.
+      const nowCoveredSet=new Set();
+      opts.forEach(o=>{
+        const trial=[...cardsWithout,o];
+        const stillMissingTrial=new Set(trueGaps(form.slots,trial));
+        missingBefore.forEach(p=>{if(!stillMissingTrial.has(p))nowCoveredSet.add(p);});
+      });
+      const nowCovered=missingBefore.filter(p=>nowCoveredSet.has(p));
+      // Still missing = anything no single option here can resolve on its own.
+      const missingNow=missingBefore.filter(p=>!nowCoveredSet.has(p));
 
       if(nowCovered.length){
         // ---- SUCCESSFUL FILL: this board covers something that was missing ----
@@ -11853,12 +11886,34 @@ function judgeSlotInline(preCtx){
           return nowCovered.every(p=>!stillMissing.has(p));
         });
         const posLabel='<b>'+nowCovered.join(', ')+'</b>';
-        const coverNames=coveringOpts.map(o=>'<b>'+esc(cardName(o))+'</b>').join(', ');
-        urgent='<div class="tiny" style="color:var(--good);margin-top:6px">\u2705 This board covers '+posLabel+' \u2014 your XI needed that. '
-          +(coveringOpts.length===opts.length
-            ? 'Any option here fills it.'
-            : 'Covered by: '+coverNames+'.')
-          +'</div>';
+        // v17.8.20: per-position breakdown. When this pick newly covers MORE THAN ONE position
+        // (e.g. GK via one card, CB via a different card in the same hold), the old flat "Covered
+        // by: A, B" line couldn't say which card covers which position — just a jumbled name list
+        // next to a jumbled position list. coveringOptsFor(p) reruns the exact same direct/
+        // transitive test above but scoped to a SINGLE position, so each position in nowCovered
+        // gets its own, correctly-attributed list. The single-position case (still the most common)
+        // keeps the old flat-list wording verbatim, unchanged.
+        const coveringOptsFor=p=>opts.filter(o=>{
+          if(o.pos&&o.pos.includes(p))return true;
+          const trial=[...cardsWithout,o];
+          const stillMissing=new Set(trueGaps(form.slots,trial));
+          return !stillMissing.has(p);
+        });
+        let coverHtml;
+        if(coveringOpts.length===opts.length){
+          coverHtml='Any option here fills it.';
+        }else if(nowCovered.length===1){
+          const coverNames=coveringOpts.map(o=>'<b>'+esc(cardName(o))+'</b>').join(', ');
+          coverHtml='Covered by: '+coverNames+'.';
+        }else{
+          const perPos=nowCovered.map(p=>{
+            const forP=coveringOptsFor(p);
+            const names=forP.length===opts.length?'any option here fills it':forP.map(o=>'<b>'+esc(cardName(o))+'</b>').join(', ');
+            return '<b>'+p+'</b> covered by: '+names+'.';
+          });
+          coverHtml=perPos.join(' ');
+        }
+        urgent='<div class="tiny" style="color:var(--good);margin-top:6px">\u2705 This board covers '+posLabel+' \u2014 your XI needed that. '+coverHtml+'</div>';
       } else if(!missingNow.length){
         // Nothing missing before or after — no flag needed.
         urgent='';
@@ -11934,6 +11989,10 @@ function judgeSlotInline(preCtx){
           soleNote='<div class="tiny" style="color:var(--warn);margin-top:6px">\u23f3 '+posLabel+' still isn\u2019t covered and you have '+pendingAfter+' picks left \u2014 keep an eye on it.'+xiPosNote+'</div>';
         }
         // 7+ pending: no urgency note — just the red flag above is enough.
+        // Once a scaled urgency note has fired here, the earlier generic "nothing here
+        // covers it" red flag would just repeat the same "still missing X" point a second
+        // time — drop it and let the more specific, urgency-scaled note stand alone.
+        if(soleNote)urgent='';
       }
     }
   }
