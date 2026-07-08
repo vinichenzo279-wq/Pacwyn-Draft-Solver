@@ -47,6 +47,7 @@
           - Where you got to / what the next step would be, with enough detail that a fresh session
             can pick it up without re-deriving the approach.
         Keep the note factual and terse — it is a handoff, not a summary.
+     6. Do not overthink semantic inconsistancies, numberings, details that are not worth wasting effort on. In such a large self-contained file, inconsistancies are inevitable.
      ================================================================================================ -->
 <html lang="en">
 <head>
@@ -55,7 +56,7 @@
 <meta property="og:description" content="DraftSolver">
 <!-- VERSION: bump this AND the matching v-number in the <h1><span> below on every patch, however
      small — see the longer note next to the <h1> for why this matters. -->
-<title>Draft Solver v17.8.9</title>
+<title>Draft Solver v17.8.10</title>
 <!-- ABOUT THIS APP / DATA SOURCE:
      This tool is for PACWYN, a game that heavily parallels EA FC but is NOT FC — it uses FC's
      real player cards as a base and adds its own exclusive cards on top. That's why FC data is a
@@ -4196,7 +4197,19 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
        hand-set judgment calls": the group covers more than take-vs-hold now (pivot commitment
        weights, clash mitigation) and the old name undersold its scope. No IDs, weights, or
        behavior changed -- shapeGrid-squad's contents and resetSquadWeights() are untouched. -->
-  <h1 class="cap">&#11041; Draft Solver <span style="font-size:11px;opacity:.55;font-weight:400;letter-spacing:0">v17.8.9</span></h1>
+  <!-- v17.8.10 -- BUGFIX (dead code only, no live behavior change). Applied FOR FUTURE MAINTAINERS
+       section V's identified one-line fix to spMaxFreeBox's second loop, in BOTH copies (this
+       file's in-script definition and the appendix's solver_bound_tests_v2.js): added
+       `if(sumOthers+v>freeCap+EPS)continue;` right after the existing clamp, before the candidate
+       is scored, so a clamped flex value that's still infeasible against freeCap is rejected
+       instead of being allowed to win the max. Per section T, h2NodeBound/assignMaxSumNode/
+       spMaxFreeBox remain UNCALLED in this file (v16.16.0 call site still commented out, __d/r2Vec
+       is still the sole live per-node bound), and the appendix script still only runs standalone
+       via `node`, so this patch changes nothing about any live solve. Not re-verified against the
+       full section H baseline scale per section V's own follow-up ask (only the original
+       2000-trial/seed=12345 spot-check backs this, per section V's write-up) -- re-run before
+       relying on this beyond that spot-check if h2NodeBound is ever revisited. -->
+  <h1 class="cap">&#11041; Draft Solver <span style="font-size:11px;opacity:.55;font-weight:400;letter-spacing:0">v17.8.10</span></h1>
   <div class="cap sub">pacwyn draft optimiser</div>
   <div style="position:absolute;right:2px;top:40px;text-align:right;font-size:10px;line-height:1.5;color:var(--mut)">Created by <b style="color:var(--ink)">Chenzo</b><br><span style="opacity:.8">Special thanks to BWFCPackfan</span></div>
 </header>
@@ -6584,6 +6597,7 @@ function solveBest(form,cards,nodeCap,ratingCeil,seedBest,seedXIs,skipTies,diver
         let v=freeCap-sumOthers;
         if(v<L[flex])v=L[flex];
         if(v>U[flex])v=U[flex];
+        if(sumOthers+v>freeCap+EPS)continue; // v17.8.10 UB-SPFREEBOX fix: reject a clamped flex candidate that's still infeasible (see FOR FUTURE MAINTAINERS section V)
         vals[flex]=v;
         const sp=spOf(vals);if(sp>best)best=sp;
       }
@@ -12722,6 +12736,7 @@ function spMaxFreeBox(fixedVals,L,U,SmaxTotal){
       let v=freeCap-sumOthers;
       if(v<L[flex])v=L[flex];
       if(v>U[flex])v=U[flex];
+      if(sumOthers+v>freeCap+EPS)continue; // v17.8.10 UB-SPFREEBOX fix: reject a clamped flex candidate that's still infeasible (see FOR FUTURE MAINTAINERS section V)
       vals[flex]=v;
       const sp=spOf(vals);if(sp>best)best=sp;
     }
