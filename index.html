@@ -7,6 +7,51 @@
      It means work was interrupted mid-task, and the next step is already figured out — do not
      re-derive the approach.
 
+     ================================================================================================
+     FAST PATH — ADDING / EDITING / FIXING DB CARDS (by far the most common task, and the one this
+     file was previously bad at guiding). If your ENTIRE task is changing player-card rows in
+     DEFAULT_DB, do ONLY the six steps below and IGNORE the rest of this file — the reading order,
+     the FOR FUTURE MAINTAINERS sections, the changelog rationale, the solver/harness: none of it
+     applies to a pure DB edit. Reading them is the main way this task wastes effort.
+
+       1. FIND THE ARRAY WITHOUT READING IT. Search the file for the token  __DEFAULT_DB__  — it
+          marks the start of the DEFAULT_DB array. The array is ONE line, ~300KB, ~2200 rows. Do
+          NOT open, scan, or print it wholesale; that is the single biggest time-sink and it buys
+          nothing (you never need the whole array to add or fix a row).
+
+       2. CARD SHAPE. Each row is one object with these fields in this order:
+            {"name":"Salah","rating":100,"type":"normal","nation":"Egypt","league":"England Premier League","club":"Liverpool","pos":["RW","RM"]}
+          - type is "normal" | "icon" | "hero".
+          - normal -> real "club" + real "league".   icon -> "league":"Icons", "club":null.
+            hero -> real "league", "club":null.
+          - pos is an array, PRIMARY POSITION FIRST (rest of the order is irrelevant).
+          - rating is a number. Icons/heroes/non-EPL normals at 101+ are EXPECTED, not typos.
+
+       3. CHECK SPELLING BY SEARCHING FOR ONE EXISTING ROW — NOT BY READING THE ARRAY. nation / club
+          / league must match the DB's existing spelling verbatim (e.g. "Korea Republic" not "South
+          Korea"; the DB's own forms like "Spurs", "Nott'm Forest", "Man Utd", "AFC Bournemouth").
+          To confirm one, SEARCH the file for that exact quoted string (e.g. search  "Crystal Palace"
+          ) and copy the hit. One match is enough — do not scroll the array looking for more.
+
+       4. INSERT ANYWHERE INSIDE THE BRACKETS. Placement is irrelevant (the DB is canonicalized at
+          load, not read in file order). Duplicate rows are allowed (since v16.0). For an EDIT/FIX,
+          search the specific existing row and change the field in place.
+
+       5. MISSING FIELD -> ASK, DON'T INVENT. If a card lacks something its type needs (icon w/o
+          nation; normal w/o club or nation; hero w/o league; anything w/o rating or pos), STOP and
+          ask. Never guess a plausible-looking value. (If type is omitted but a club is given,
+          assume "normal".)
+
+       6. VERSION + CHANGELOG. Bump ONLY the third version segment in BOTH the <title> and the
+          <h1><span> (e.g. 17.8.26 -> 17.8.27). Add a one-line changelog entry above the <h1> naming
+          the card(s) touched. Do not touch the solver, the harness, the appendix, or any lettered
+          section. Done.
+
+     (Full rationale for each rule is in section I below, but you should not need it for a routine
+     card edit — the six steps above are the whole job. If your task is ANYTHING other than a pure
+     DB card edit, ignore this FAST PATH and use the normal reading order that follows.)
+     ================================================================================================
+
      Otherwise, follow the normal reading order below:
      ================================================================================================
 
@@ -26,7 +71,9 @@
           - Formation / position / slot logic   → L (contains the UNDERLYING DRAFT FORMAT primer),
                                                    then F, then any UB-* sections the task touches.
           - Solver / pruning / bounds change    → H (harness), D (known gaps), then J/O/R/S/T/V/W.
-          - DB card entry                       → I (checklist), N (scope/limitations).
+          - DB card entry                       → use the FAST PATH block at the very top of this
+                                                   file (you should not need anything else); full
+                                                   rules/rationale in I, DB scope/limits in N.
           - New arbitrary constant / threshold  → M (philosophy: advanced setting or hardcode?).
           - Future edition / ruleset change     → Q (prep playbook), then A, E, F as relevant.
           - Soundness re-run                    → H, then W, X for most recent baseline.
@@ -62,7 +109,7 @@
 <meta property="og:description" content="DraftSolver">
 <!-- VERSION: bump this AND the matching v-number in the <h1><span> below on every patch, however
      small — see the longer note next to the <h1> for why this matters. -->
-<title>Draft Solver v17.8.26</title>
+<title>Draft Solver v17.8.28</title>
 <!-- ABOUT THIS APP / DATA SOURCE:
      This tool is for PACWYN, a game that heavily parallels EA FC but is NOT FC — it uses FC's
      real player cards as a base and adds its own exclusive cards on top. That's why FC data is a
@@ -3078,57 +3125,45 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
             zero rate says anything about an actual change in behavior, rather than just being what
             a ~1-in-1,774 event looks like most of the time at small n.
 
-       I. ADDING A NEW DEFAULT_DB ENTRY (added v13.4.4.4, process convention — not a code/logic
-          entry). Goal: make new-card entry fast and mechanical, not a source of bikeshedding.
-          Rules for anyone (human or model) appending a card to DEFAULT_DB:
-            1. PLACEMENT DOESN'T MATTER. DEFAULT_DB is canonicalized/processed at load, not read
-               in file order, so where in the array a new entry lands is irrelevant. Don't spend
-               time hunting for "the right spot" — append and move on. What DOES matter is
-               spelling/formatting consistency with existing entries for the same field (e.g.
-               nation must match the DB's existing convention exactly — "Korea Republic", not
-               "South Korea"; club/league strings must match existing rows verbatim). Copy an
-               existing row's field spelling rather than inventing a new variant.
-            2. (SUPERCEDED AS OF V16.0 - DUPLICATE ENTRIES ARE NOW ACCEPTABLE TO ADD - ignore this section) EXACT-DUPLICATE SKIP. Before adding, check for an existing row with the same name +
-               rating + type + nation + club + league, where pos is compared as a SET (order
-               doesn't matter — CM/CDM and CDM/CM are the same entry, so this is a duplicate and
-               should be skipped). Any difference in name, rating, nation, club, league, or the
-               pos SET (not just order) means it's a genuinely new entry, not a duplicate — add
-               it. Example: a second Wirtz/96/Germany/Liverpool card listing CAM/CM is a skip
-               against an existing CM/CAM row; the same name+rating+nation+club but with ST/CM
-               instead is a new entry (different pos set); a transfer to a different club (or a
-               different nation, i.e. two same-named players who aren't the same person) is also
-               a new entry, not a duplicate.
-            3. HIGH RATINGS ARE EXPECTED, NOT TYPOS. New non-prem-league entries (icons, heroes,
-               and non-EPL normals) commonly land at 101+ — this is consistent with the existing
-               DB's rating scale for those categories and should not be "corrected" downward.
-               Only flag a NAME as a possible typo if it looks wrong; don't second-guess ratings
-               in that range.
-            4. MISSING REQUIRED FIELD = FLAG, DON'T FORCE. If an entry is missing something its
-               type requires — an icon with no nation, a normal with no club or nation, a hero
-               with no league, or any entry missing rating/positions — do not guess or invent a
-               plausible-looking value to fill the gap. Stop and flag the specific missing field
-               back to whoever supplied the entry instead of adding an incomplete/guessed row.
-            5. VERSION BUMP = THIRD NUMBER, NO OVERTHINKING. Routine DB additions bump only the
-               third segment (e.g. 1.2.3.4 -> 1.2.4), full stop — don't deliberate over whether a
-               given change "deserves" a different segment.
-            6. TYPE IS ALWAYS GIVEN — DON'T "CORRECT" IT. Every new entry comes with its card type
-               (icon/hero/normal) already specified by whoever supplied it. If a retired player
-               shows up as type "normal" instead of the icon/hero type that player would normally
-               be expected under, that is not a mistake to fix — assume it's a special/promo
-               "normal"-type card for that player and add it as given. Don't silently change the
-               stated type to what "seems right" for the player.
-            7. DON'T READ THE FULL DB TO CHECK SPELLING — ONE ENTRY IS ENOUGH. DEFAULT_DB is too
-               large to scan in full before every addition, and naming consistency is the only
-               thing that actually matters (e.g. "Spurs" vs "Tottenham" — the DB uses one of the
-               two consistently). Formatting is likewise consistent throughout, so a single
-               existing entry is sufficient to infer the correct naming/format for a new one;
-               don't scan the entire section looking for confirmation. If there is no entry
-               to compare to, then check the canonical list to find the correct naming.
-            8. PRIMARY POSITION FIRST. Primary position is always listed first in pos; secondary
-               position ordering after that is irrelevant.
-            9. TYPE OMITTED BUT CLUB GIVEN = ASSUME NORMAL. If an entry specifies a club but its
-               card type isn't stated, don't stop and flag it under rule 4 — assume type "normal"
-               and add it as such.
+       I. ADDING / EDITING A DEFAULT_DB CARD (added v13.4.4.4; reworked v17.8.27 to be a direct
+          instruction set rather than loose advice). Process convention — not a code/logic change.
+          NOTE: for a routine card edit you do not need this section at all — the FAST PATH block at
+          the very top of the file is the complete procedure. This section is the same procedure with
+          the full "why" behind each rule, for when something is ambiguous. The operational core, in
+          order of what actually matters:
+
+            THE MECHANICAL RECIPE (this is the whole task):
+            a. Find the array by searching for the token  __DEFAULT_DB__ . It is ONE line, ~2200
+               rows, ~300KB. Never read it in full — you don't need to, and doing so is the main
+               way this task wastes effort. (This is also why the appendix's old comment-copy of the
+               DB was deleted in v17.8.22: one source of truth, nothing to keep in sync.)
+            b. Write the row in the exact shape, fields in this order:
+                 {"name":..., "rating":<num>, "type":"normal|icon|hero", "nation":..., "league":..., "club":..., "pos":[...]}
+               normal -> real club + real league.  icon -> "league":"Icons","club":null.
+               hero -> real league,"club":null.  pos: PRIMARY FIRST, rest of order irrelevant.
+            c. Match nation/club/league spelling to existing rows VERBATIM. Confirm a string by
+               SEARCHING the file for one existing occurrence of it (e.g. search "Aston Villa") and
+               copying that; a single hit is authoritative — the DB is internally consistent, so you
+               never need a second opinion or a full scan. If nothing exists to copy (a genuinely new
+               club/league/nation), use the game's canonical spelling.
+            d. Insert anywhere inside the brackets (placement is load-order-independent). For an edit,
+               search the specific row and change it in place.
+            e. Bump the THIRD version segment only, in <title> AND <h1><span>; add a one-line
+               changelog entry above the <h1>. Nothing else in the file is touched.
+
+            THE JUDGEMENT RULES (only relevant when an entry looks off — otherwise ignore):
+            - DUPLICATES ARE FINE (since v16.0). Do not dedupe, do not skip a row for matching an
+              existing one. (The old "exact-duplicate skip" rule is dead — ignore any reference to it.)
+            - HIGH RATINGS ARE EXPECTED, NOT TYPOS. Icons, heroes, and non-EPL normals routinely sit
+              at 101+. Don't "correct" a rating in that range downward. Only a NAME that looks wrong
+              is worth querying.
+            - MISSING REQUIRED FIELD -> ASK, don't invent. icon w/o nation, normal w/o club or nation,
+              hero w/o league, or anything w/o rating or pos: stop and request the specific field.
+              Never fill a gap with a plausible guess. (Exception: type omitted but a club given ->
+              assume "normal" and proceed; don't stop for that.)
+            - TYPE IS AS GIVEN — DON'T "CORRECT" IT. If a player you'd expect as an icon/hero is
+              supplied as "normal" (or vice-versa), that's an intended special/promo card. Add it with
+              the stated type; don't override to what "seems right".
 
        J. UB-I: A TRIED-AND-REJECTED RATING-BOUND TIGHTENING (added v13.4.6, doc-only — records a
           dead end so it isn't re-attempted without this write-up in hand). Motivated by section
@@ -4465,7 +4500,32 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
        immediately under the "Current helper pivot" summary line, before row 1, matching user
        feedback that it was easy to miss below a long candidate list. No change to _pivotCalStale,
        to when the warning fires, or to any other logic -- purely a DOM-position fix. -->
-  <h1 class="cap">&#11041; Draft Solver <span style="font-size:11px;opacity:.55;font-weight:400;letter-spacing:0">v17.8.26</span></h1>
+  <!-- v17.8.27 -- DOCUMENTATION ONLY, no logic/UI/data change. Reworked the two pieces of this
+       file that guide adding DB cards, because the old wording made that (the most common task)
+       slow and effort-wasting for an AI editor: (1) added a FAST PATH block at the very top of the
+       AI-maintainer header -- a six-step, self-contained recipe for a pure DB card edit that tells
+       the editor to find the array via the __DEFAULT_DB__ token WITHOUT reading its ~300KB body,
+       gives the exact row shape, and says to confirm a club/nation/league spelling by searching for
+       ONE existing occurrence rather than scanning the array; and to ignore the rest of the file for
+       a pure card edit. (2) Rewrote section I from loose advice into that same ordered recipe plus a
+       short "judgement rules" list (duplicates allowed, high ratings expected, missing field -> ask,
+       type-as-given), and dropped the long-dead pre-v16.0 "exact-duplicate skip" rule. (3) Repointed
+       the index's "DB card entry" line at the FAST PATH. No card data, solver, bound, UI, or weight
+       changed. -->
+  <!-- v17.8.28 -- FIX: three bugs where `copies` and `primary` were silently dropped on import or
+       edit. (1) IMPORT copies: the #dbFile handler rebuilt each record field-by-field but never read
+       p.copies, so round-tripping an exported DB reset every card to 1 copy. Now reads and clamps
+       (max 99); on a duplicate-key collision the merge keeps whichever side has the higher count.
+       (2) IMPORT primary: same handler never read p.primary, losing every card's designated primary
+       on import. Now reads, normPos()-canonicalises, and validates against the card's own pos array
+       (falls back to pos[0] if the stored primary isn't in the card's positions). On a collision the
+       merge keeps the existing record's primary if still valid in the unioned pos set, else falls
+       back to the incoming primary, then pos[0]. (3) EDIT FORM copies: the dbe-* inline edit form
+       had no Copies field, so saving any edit silently wiped the card's copy count. Added a Copies
+       number input (min 1, max 99, pre-filled from p.copies) in a flex row beside the Primary
+       position dropdown, matching the add-card form layout. saveDBEdit() now reads #dbe-copies and
+       writes it onto the updated entry the same way addToDB() already did. -->
+  <h1 class="cap">&#11041; Draft Solver <span style="font-size:11px;opacity:.55;font-weight:400;letter-spacing:0">v17.8.28</span></h1>
   <div class="cap sub">pacwyn draft optimiser</div>
   <div style="position:absolute;right:2px;top:40px;text-align:right;font-size:10px;line-height:1.5;color:var(--mut)">Created by <b style="color:var(--ink)">Chenzo</b><br><span style="opacity:.8">Special thanks to BWFCPackfan</span></div>
 </header>
@@ -5803,15 +5863,23 @@ $('#dbFile').addEventListener('change',e=>{
     const before=playerDB.length;
     arr.forEach(p=>{
       if(!p||!p.name)return;
+      const cpIn=parseInt(p.copies,10);
+      const posArr=(p.pos||[]).map(normPos);
+      const prIn=p.primary?normPos(p.primary):null;
       const rec={name:p.name,rating:parseInt(p.rating)||0,type:(p.type||'normal'),
         nation:canonNation(p.nation||''),league:canonLeague(p.league),club:canonClub(p.club||null),
-        pos:(p.pos||[]).map(normPos)};
+        pos:posArr,primary:(prIn&&posArr.includes(prIn))?prIn:(posArr[0]||null),
+        copies:(cpIn&&cpIn>1)?Math.min(99,cpIn):undefined};
       const key=keyOf(rec);
       if(merged[key]){
-        // true duplicate (identical on every field including nation) - keep the canonical rec, union the positions
+        // true duplicate (identical on every field including nation) - keep the canonical rec, union the positions,
+        // keep whichever side recorded more copies (never silently lose copies you already had on file),
+        // and keep whichever primary is still valid against the unioned positions (prefer the existing one).
         const m=merged[key];
         const pos=Array.from(new Set([...(m.pos||[]),...rec.pos]));
-        merged[key]={...rec,pos};
+        const cp=Math.max(m.copies||1,rec.copies||1);
+        const primary=(m.primary&&pos.includes(m.primary))?m.primary:((rec.primary&&pos.includes(rec.primary))?rec.primary:(pos[0]||null));
+        merged[key]={...rec,pos,primary,copies:cp>1?cp:undefined};
       } else merged[key]=rec;
     });
     playerDB=Object.values(merged).filter(p=>p.name);rebuildRarity();
@@ -5934,8 +6002,12 @@ function openDBEdit(i,rowEl){
     <select id="dbe-club" style="font-size:13px">${clubsForLeague(leagueVal).map(c=>'<option'+(clubVal===c?' selected':'')+'>'+c+'</option>').join('')}</select></div>
     <label style="font-size:11px;color:var(--mut);display:block;margin-bottom:3px">Positions</label>
     <div style="margin-bottom:8px;line-height:1.8">${posChks}</div>
-    <label style="font-size:11px;color:var(--mut);display:block;margin-bottom:3px">Primary position <span style="color:var(--mut)">&mdash; options are limited to positions ticked above</span></label>
-    <select id="dbe-primary" style="font-size:13px;margin-bottom:8px"></select>
+    <div class="row" style="gap:8px;align-items:flex-end;margin-bottom:8px">
+      <div style="flex:2"><label style="font-size:11px;color:var(--mut);display:block;margin-bottom:3px">Primary position <span style="color:var(--mut)">&mdash; options are limited to positions ticked above</span></label>
+      <select id="dbe-primary" style="font-size:13px"></select></div>
+      <div style="flex:1"><label style="font-size:11px;color:var(--mut);display:block;margin-bottom:3px">Copies <span style="color:var(--mut)">&mdash; identical prints</span></label>
+      <input id="dbe-copies" type="number" value="${p.copies&&p.copies>1?p.copies:1}" inputmode="numeric" min="1" autocomplete="off" style="font-size:13px"></div>
+    </div>
     <div class="row" style="gap:6px">
       <button class="btn sm" style="flex:2" onclick="saveDBEdit(${i})">Save changes</button>
       <button class="btn gho sm" style="flex:1" onclick="cancelDBEdit()">Cancel</button>
@@ -6006,7 +6078,9 @@ function saveDBEdit(i){
     if(!LEAGUE_NAMES.includes(league)){err.textContent='Pick a valid league from the list.';return;}
     if(t==='normal')club=div.querySelector('#dbe-club').value;
   }
-  playerDB[i]={name,rating,type:t,nation,league,club,pos:pos.map(normPos),primary};
+  const cpIn=div.querySelector('#dbe-copies')?parseInt(div.querySelector('#dbe-copies').value,10):1;
+  const copies=(cpIn&&cpIn>1)?Math.min(99,cpIn):undefined;
+  playerDB[i]={name,rating,type:t,nation,league,club,pos:pos.map(normPos),primary,copies};
   rebuildRarity();
   setDBStatus(playerDB.length+' cards in the database.','var(--good)');_dbSave();
   div.remove();
