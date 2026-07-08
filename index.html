@@ -47,6 +47,13 @@
           - Where you got to / what the next step would be, with enough detail that a fresh session
             can pick it up without re-deriving the approach.
         Keep the note factual and terse — it is a handoff, not a summary.
+
+     6. CRITICAL BUG TESTING: if a recreation log is provided showing a bad solution, first verify
+        the information in the log matches up to what is expected. Example: a previous bug was
+        thoroughly investigated for whether the manager calculation was wrong. The actual root
+        cause was simply that Guessand had the wrong nation (France, not Ivory Coast), which caused
+        a rabbit-hole chase of a bug that never existed. Most bugs will be DB-related, but that does
+        not mean no other bug could possibly exist — it's just guidance for what to check first.
      ================================================================================================ -->
 <html lang="en">
 <head>
@@ -55,7 +62,7 @@
 <meta property="og:description" content="DraftSolver">
 <!-- VERSION: bump this AND the matching v-number in the <h1><span> below on every patch, however
      small — see the longer note next to the <h1> for why this matters. -->
-<title>Draft Solver v17.8.22</title>
+<title>Draft Solver v17.8.23</title>
 <!-- ABOUT THIS APP / DATA SOURCE:
      This tool is for PACWYN, a game that heavily parallels EA FC but is NOT FC — it uses FC's
      real player cards as a base and adds its own exclusive cards on top. That's why FC data is a
@@ -4328,6 +4335,27 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
        first consumption, so a later manual "Analyze pivots from DB" click never re-overrides a pivot
        the user has since chosen deliberately. Pivot state remains localStorage-only (no sessionStorage
        involved, unchanged). No solver, bound, calibration-fit, or valuation-of-XI math changed. -->
+  <!-- v17.8.19 -- UI: the green "\u2705 This board covers X \u2014 your XI needed that" pick-time note
+       (pick 12+, when a hold newly fills a previously-missing formation position) flattened its
+       position list AND its covering-card list into two separate, unattributed comma lists whenever
+       a single pick's hold newly covered MORE THAN ONE position at once -- e.g. GK via one card and
+       CB via a different card in the same hold showed as "covers GK, CB ... Covered by: PlayerA,
+       PlayerB", with no way to tell which card covers which position.
+       FIX SHIPPED HERE: added coveringOptsFor(p), scoping the exact same direct/transitive coverage
+       test the note already used to a single position, so when nowCovered.length>1 the note lists
+       each position on its own with only the option(s) that actually cover THAT position (e.g. "GK
+       covered by: PlayerA. CB covered by: PlayerB."). The single-position case (still the overwhelming
+       majority of pick-12+ fills) kept the exact old flat-list wording, unchanged.
+       NOTE (added retroactively): this only fixed the DISPLAY side of a deeper issue -- nowCovered
+       itself, upstream, could still under-report which positions were actually newly covered whenever
+       a hold's cards spanned different missing positions, because trueGaps() treats a whole hold as
+       one mutually-exclusive group that can only consume a single formation slot in its matching. That
+       root cause was identified and fixed properly in v17.8.20 (its BUG 1). This entry is being
+       inserted after the fact, between v17.8.18 and v17.8.20 where it belongs, because the changelog
+       entry for this version was written but never actually committed to the file before v17.8.20
+       shipped over it -- leaving a confusing, undocumented .18-to-.20 jump with no record of what
+       .19 itself had done. No solver, bound, calibration-fit, or valuation-of-XI math changed; purely
+       a display fix inside the pick-time helper note. -->
   <!-- v17.8.20 -- BUGFIX: two related defects in the pick-time coveredNow / missingNow / warning-area
        logic, both affecting pick 12+ helper notes.
 
@@ -4377,7 +4405,24 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
        realDB regime expects). No solver/bound/UI/DEFAULT_DB content changed -- this only
        removes a stale, no-longer-load-bearing comment and the maintenance burden of keeping it
        in sync. -->
-  <h1 class="cap">&#11041; Draft Solver <span style="font-size:11px;opacity:.55;font-weight:400;letter-spacing:0">v17.8.22</span></h1>
+  <!-- v17.8.23 -- (1) DOCUMENTATION: inserted the missing v17.8.19 changelog entry above (between
+       v17.8.18 and v17.8.20) — it had been written but never actually committed to the file before
+       v17.8.20 shipped over it, leaving a confusing, undocumented .18-to-.20 jump. No code from that
+       entry is new; everything it describes was already live from v17.8.20 onward. This is purely a
+       historical-record fix so future readers aren't left guessing what happened to .19.
+       (2) HELPER NODE CAP DEFAULT lowered 3M -> 1M: getHelperNodeCap()'s fallback (3000000 ->
+       1000000), #helperNodeCapInput's default value (3 -> 1), and resetDefaults()'s helper field (3 ->
+       1) all updated together. Recent fixes to the pick-time coverage logic (v17.8.20) made a 3M-node
+       inline "check this pick" search noticeably slower than it needs to be for what's meant to be a
+       quick per-pick check; 1M keeps it responsive while the existing escalate-deeper option (offered
+       automatically on a capped result, nextCap = cap*3) still lets anyone go further on demand. Only
+       the inline pick helper's default changed — the main, bench, and manager node caps all remain at
+       their existing 3M default, untouched. Updated the Helper Node Cap field's tiny-text description
+       to match ("Default 3M." -> "Default 1M."). No solver, bound, calibration-fit, or valuation-of-XI
+       math changed; purely a default-value + label change. Anyone with an already-saved Advanced
+       Settings value keeps their own saved number either way — only fresh installs and explicit
+       "Reset to defaults" now land on 1M instead of 3M. -->
+  <h1 class="cap">&#11041; Draft Solver <span style="font-size:11px;opacity:.55;font-weight:400;letter-spacing:0">v17.8.23</span></h1>
   <div class="cap sub">pacwyn draft optimiser</div>
   <div style="position:absolute;right:2px;top:40px;text-align:right;font-size:10px;line-height:1.5;color:var(--mut)">Created by <b style="color:var(--ink)">Chenzo</b><br><span style="opacity:.8">Special thanks to BWFCPackfan</span></div>
 </header>
@@ -4571,8 +4616,8 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
       </div>
       <div style="margin-top:14px">
         <label style="font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;display:block">Helper Node Cap (millions)</label>
-        <input type="number" id="helperNodeCapInput" min="1" value="3" inputmode="numeric" style="width:100%" onblur="clampNodeCap(this);saveAdvSettings()">
-        <p class="tiny" style="margin:4px 0 0">Search budget for the inline pick helper (the &ldquo;check this pick&rdquo; button while drafting), before it reports a capped result and offers a deeper search. Default 3M.</p>
+        <input type="number" id="helperNodeCapInput" min="1" value="1" inputmode="numeric" style="width:100%" onblur="clampNodeCap(this);saveAdvSettings()">
+        <p class="tiny" style="margin:4px 0 0">Search budget for the inline pick helper (the &ldquo;check this pick&rdquo; button while drafting), before it reports a capped result and offers a deeper search. Default 1M.</p>
       </div>
       <div style="margin-top:14px">
         <label style="font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;display:block">Target score (optional)</label>
@@ -7643,7 +7688,7 @@ function getNodeCap(){const el=$('#nodeCapInput');if(!el)return 3000000;const v=
 // exposed in Advanced solver settings (Helper Node Cap field). Same fallback pattern as
 // getNodeCap()/getBenchNodeCap(): missing/invalid input -> 3M, matching the hardcoded default
 // this replaces, so existing behaviour is unchanged unless the user opts in.
-function getHelperNodeCap(){const el=$('#helperNodeCapInput');if(!el)return 3000000;const v=parseInt(el.value,10);return(isNaN(v)||v<1)?3000000:v*1000000;}
+function getHelperNodeCap(){const el=$('#helperNodeCapInput');if(!el)return 1000000;const v=parseInt(el.value,10);return(isNaN(v)||v<1)?1000000:v*1000000;}
 // Bench / manager mini-solve caps, exposed in Advanced solver settings (Bench/Manager Node Cap
 // fields). Same fallback pattern as getNodeCap(): missing/invalid input -> 3M, matching the
 // hardcoded default this replaces, so existing behaviour is unchanged unless the user opts in.
@@ -7712,7 +7757,7 @@ function resetAdvSettings(){
   const nc=$('#nodeCapInput');if(nc)nc.value=3;        // 3M
   const bnc=$('#benchNodeCapInput');if(bnc)bnc.value=3; // 3M
   const mnc=$('#mgrNodeCapInput');if(mnc)mnc.value=3;   // 3M
-  const hnc=$('#helperNodeCapInput');if(hnc)hnc.value=3; // 3M
+  const hnc=$('#helperNodeCapInput');if(hnc)hnc.value=1; // 1M (v17.8.23: lowered from 3M — helper stays fast for per-pick checks)
   const bm=$('#benchMode');if(bm)bm.value='vfast';     // Very Fast bench
   const md=$('#mgrDepth');if(md)md.value='0';_updMgrDepthLbl(); // manager depth 0% default
   const dp=$('#divPctSlider');if(dp)dp.value=100;_updDivPctLbl(); // 100% divstatic
