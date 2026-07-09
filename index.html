@@ -26,6 +26,10 @@
             hero -> real "league", "club":null.
           - pos is an array, PRIMARY POSITION FIRST (rest of the order is irrelevant).
           - rating is a number. Icons/heroes/non-EPL normals at 101+ are EXPECTED, not typos.
+          - copies (OPTIONAL, omit unless told otherwise): a positive integer, 2-99. Only add it if
+            asked for "N copies" of a specific card. It's a draw-supply weight (rarity/reliability
+            calculations), NOT a way to make one row fill multiple squad slots. Omit entirely for a
+            normal single card -- do not default it to 1 (undefined and 1 behave identically).
 
        3. CHECK SPELLING BY SEARCHING FOR ONE EXISTING ROW — NOT BY READING THE ARRAY. nation / club
           / league must match the DB's existing spelling verbatim (e.g. "Korea Republic" not "South
@@ -33,16 +37,27 @@
           To confirm one, SEARCH the file for that exact quoted string (e.g. search  "Crystal Palace"
           ) and copy the hit. One match is enough — do not scroll the array looking for more.
 
-       4. INSERT ANYWHERE INSIDE THE BRACKETS. Placement is irrelevant (the DB is canonicalized at
+       4. NEW LEAGUE OR CLUB THAT DOESN'T EXIST YET (e.g. adding Messi as "USA MLS" / "Inter Miami").
+          Just type the new league/club name straight into the row like any other field — there is
+          no separate registry to update for the DATA to work; canonLeague()/canonClub() pass an
+          unrecognized string through unchanged. One extra step if a NEW LEAGUE needs to be pickable
+          in the Add/Edit-card UI dropdowns and the formation-calibrator's club list: add it to the
+          LEAGUES array (search for  const LEAGUES=  ) and to CLUBS_BY_LEAGUE (search for
+          CLUBS_BY_LEAGUE ) with its club list -- see the "USA MLS" entries in both as the template
+          (CLUBS_BY_LEAGUE included several "Temporary Club N" placeholders alongside the one real
+          club, for future signings before their real club is known). A brand-new CLUB inside an
+          EXISTING league needs no registry edit at all -- just type it in the row.
+
+       5. INSERT ANYWHERE INSIDE THE BRACKETS. Placement is irrelevant (the DB is canonicalized at
           load, not read in file order). Duplicate rows are allowed (since v16.0). For an EDIT/FIX,
           search the specific existing row and change the field in place.
 
-       5. MISSING FIELD -> ASK, DON'T INVENT. If a card lacks something its type needs (icon w/o
+       6. MISSING FIELD -> ASK, DON'T INVENT. If a card lacks something its type needs (icon w/o
           nation; normal w/o club or nation; hero w/o league; anything w/o rating or pos), STOP and
           ask. Never guess a plausible-looking value. (If type is omitted but a club is given,
           assume "normal".)
 
-       6. VERSION + CHANGELOG. Bump ONLY the third version segment in BOTH the <title> and the
+       7. VERSION + CHANGELOG. Bump ONLY the third version segment in BOTH the <title> and the
           <h1><span> (e.g. 17.8.26 -> 17.8.27). Add a one-line changelog entry above the <h1> naming
           the card(s) touched. Do not touch the solver, the harness, the appendix, or any lettered
           section. Done.
@@ -109,7 +124,7 @@
 <meta property="og:description" content="DraftSolver">
 <!-- VERSION: bump this AND the matching v-number in the <h1><span> below on every patch, however
      small — see the longer note next to the <h1> for why this matters. -->
-<title>Draft Solver v17.8.28</title>
+<title>Draft Solver v17.8.30</title>
 <!-- ABOUT THIS APP / DATA SOURCE:
      This tool is for PACWYN, a game that heavily parallels EA FC but is NOT FC — it uses FC's
      real player cards as a base and adds its own exclusive cards on top. That's why FC data is a
@@ -3126,11 +3141,12 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
             a ~1-in-1,774 event looks like most of the time at small n.
 
        I. ADDING / EDITING A DEFAULT_DB CARD (added v13.4.4.4; reworked v17.8.27 to be a direct
-          instruction set rather than loose advice). Process convention — not a code/logic change.
-          NOTE: for a routine card edit you do not need this section at all — the FAST PATH block at
-          the very top of the file is the complete procedure. This section is the same procedure with
-          the full "why" behind each rule, for when something is ambiguous. The operational core, in
-          order of what actually matters:
+          instruction set rather than loose advice; extended v17.8.30 with copies and new-league/
+          club guidance). Process convention — not a code/logic change. NOTE: for a routine card
+          edit you do not need this section at all — the FAST PATH block at the very top of the
+          file is the complete procedure. This section is the same procedure with the full "why"
+          behind each rule, for when something is ambiguous. The operational core, in order of
+          what actually matters:
 
             THE MECHANICAL RECIPE (this is the whole task):
             a. Find the array by searching for the token  __DEFAULT_DB__ . It is ONE line, ~2200
@@ -3141,11 +3157,26 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
                  {"name":..., "rating":<num>, "type":"normal|icon|hero", "nation":..., "league":..., "club":..., "pos":[...]}
                normal -> real club + real league.  icon -> "league":"Icons","club":null.
                hero -> real league,"club":null.  pos: PRIMARY FIRST, rest of order irrelevant.
+               copies is OPTIONAL and normally omitted: a positive integer (2-99) that weights how
+               often this exact card is drawn (rarity/reliability calculations only — it does NOT
+               let one row occupy multiple squad slots). Only include it when specifically asked
+               for N copies of a card; as of v17.8.30, loadDefaultDB() correctly carries a baked-in
+               copies value through on load/reset (earlier versions silently reset it to 1).
             c. Match nation/club/league spelling to existing rows VERBATIM. Confirm a string by
                SEARCHING the file for one existing occurrence of it (e.g. search "Aston Villa") and
                copying that; a single hit is authoritative — the DB is internally consistent, so you
                never need a second opinion or a full scan. If nothing exists to copy (a genuinely new
-               club/league/nation), use the game's canonical spelling.
+               club/league/nation, e.g. Messi as USA MLS / Inter Miami), use the game's canonical
+               spelling and see step (c2) below.
+            c2. NEW LEAGUE OR CLUB. Just type the new string into the row — canonLeague()/canonClub()
+               pass through anything they don't recognize, so the DATA works immediately with no
+               registry edit. If a NEW LEAGUE also needs to appear in the Add/Edit-card UI dropdowns
+               and the formation-calibrator's club list, additionally add it to the LEAGUES array
+               (search  const LEAGUES=  ) and to CLUBS_BY_LEAGUE (search  CLUBS_BY_LEAGUE  ) with a
+               club list — the "USA MLS" entries added for Messi/Inter Miami are the template
+               (CLUBS_BY_LEAGUE listed several "Temporary Club N" placeholders alongside the one real
+               club, for future signings before their club is confirmed). A new CLUB inside an
+               EXISTING league needs no registry edit — just type it in the row, as with any club.
             d. Insert anywhere inside the brackets (placement is load-order-independent). For an edit,
                search the specific row and change it in place.
             e. Bump the THIRD version segment only, in <title> AND <h1><span>; add a one-line
@@ -4512,6 +4543,12 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
        type-as-given), and dropped the long-dead pre-v16.0 "exact-duplicate skip" rule. (3) Repointed
        the index's "DB card entry" line at the FAST PATH. No card data, solver, bound, UI, or weight
        changed. -->
+  <!-- v17.8.29 -- UI LABELS ONLY, no logic/data changed. Removed the explanatory sub-clauses
+       from four labels in the add-card (db-*) and edit-card (dbe-*) DB forms, as they are
+       self-explanatory: "League" (dropped "heroes: their hero league; normals: the card's real
+       league (blank = Premier League)"), "Positions" (dropped "tap all it can play, PRIMARY
+       first"), "Primary position" (dropped "options limited to ticked positions above"), and
+       "Copies" (dropped "identical prints"). -->
   <!-- v17.8.28 -- FIX: three bugs where `copies` and `primary` were silently dropped on import or
        edit. (1) IMPORT copies: the #dbFile handler rebuilt each record field-by-field but never read
        p.copies, so round-tripping an exported DB reset every card to 1 copy. Now reads and clamps
@@ -4525,7 +4562,16 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
        number input (min 1, max 99, pre-filled from p.copies) in a flex row beside the Primary
        position dropdown, matching the add-card form layout. saveDBEdit() now reads #dbe-copies and
        writes it onto the updated entry the same way addToDB() already did. -->
-  <h1 class="cap">&#11041; Draft Solver <span style="font-size:11px;opacity:.55;font-weight:400;letter-spacing:0">v17.8.28</span></h1>
+  <!-- v17.8.30 -- FIX: loadDefaultDB() (the function that seeds playerDB from DEFAULT_DB on every
+       fresh load with no saved session, AND on every "Reset to default" click) never carried the
+       `copies` field over -- only the isDefault-comparison mapping (defMapped) and the session-
+       restore path (_dbRestore) included it. So a `copies` value baked directly into a DEFAULT_DB
+       row was silently discarded the moment the app actually loaded it, making copies effectively
+       impossible to set permanently in the DB source itself: it had to be re-entered by hand via the
+       add/edit-card forms every session. Added copies:p.copies to loadDefaultDB()'s mapping, matching
+       the other two paths. DEFAULT_DB itself is untouched -- no card currently has a copies field --
+       this only fixes the load path so one can now be added and will stick. -->
+  <h1 class="cap">&#11041; Draft Solver <span style="font-size:11px;opacity:.55;font-weight:400;letter-spacing:0">v17.8.30</span></h1>
   <div class="cap sub">pacwyn draft optimiser</div>
   <div style="position:absolute;right:2px;top:40px;text-align:right;font-size:10px;line-height:1.5;color:var(--mut)">Created by <b style="color:var(--ink)">Chenzo</b><br><span style="opacity:.8">Special thanks to BWFCPackfan</span></div>
 </header>
@@ -4959,13 +5005,13 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
       <div style="flex:.5"><label>Rating</label><input type="number" id="db-rating" inputmode="numeric" placeholder="93"></div>
       <div><label>Nation</label><div class="combo"><input type="text" id="db-nation" placeholder="type to search&hellip;" autocomplete="off"><div class="combolist" id="db-nation-list"></div></div></div>
     </div>
-    <div id="db-league-wrap"><label>League <span style="color:var(--mut)">&mdash; heroes: their hero league; normals: the card's real league (blank = Premier League)</span></label><div class="combo"><input type="text" id="db-league" placeholder="type to search&hellip;" autocomplete="off"><div class="combolist" id="db-league-list"></div></div></div>
+    <div id="db-league-wrap"><label>League</label><div class="combo"><input type="text" id="db-league" placeholder="type to search&hellip;" autocomplete="off"><div class="combolist" id="db-league-list"></div></div></div>
     <div id="db-club-wrap"><label>Club</label><select id="db-club"></select></div>
-    <label>Positions <span style="color:var(--mut)">&mdash; tap all it can play, PRIMARY first</span></label>
+    <label>Positions</label>
     <div class="chips" id="dbPosChips"></div>
     <div class="row" style="margin-top:8px;align-items:flex-end">
-      <div><label>Primary position <span style="color:var(--mut)">&mdash; options limited to ticked positions above</span></label><select id="db-primary"></select></div>
-      <div style="flex:.5"><label>Copies <span style="color:var(--mut)">&mdash; identical prints</span></label><input type="number" id="db-copies" inputmode="numeric" value="1" min="1" autocomplete="off"></div>
+      <div><label>Primary position</label><select id="db-primary"></select></div>
+      <div style="flex:.5"><label>Copies</label><input type="number" id="db-copies" inputmode="numeric" value="1" min="1" autocomplete="off"></div>
     </div>
     <div style="height:10px"></div>
     <button class="btn" onclick="addToDB()">Add to database</button>
@@ -5813,7 +5859,7 @@ function wireHelpNameCombo(){
 wireHelpNameCombo();
 function setDBStatus(msg,col){$('#dbStatus').textContent=msg;$('#dbStatus').style.color=col||'var(--mut)';}
 function clearDB(){if(!confirm('Clear the ENTIRE player database? Solving and name autofill will rely on manual entry until you reset to default.'))return;playerDB=[];rebuildRarity();setDBStatus('Database cleared \u2014 manual entry only. (Reset to default to bring it back.)');_dbSave();_renderCalResult();}
-function loadDefaultDB(){playerDB=DEFAULT_DB.map(p=>({name:p.name,rating:p.rating,type:p.type,nation:p.nation,league:p.league,club:p.club,pos:(p.pos||[]).map(normPos),primary:p.primary?normPos(p.primary):((p.pos&&p.pos[0])?normPos(p.pos[0]):null)}));rebuildRarity();
+function loadDefaultDB(){playerDB=DEFAULT_DB.map(p=>({name:p.name,rating:p.rating,type:p.type,nation:p.nation,league:p.league,club:p.club,pos:(p.pos||[]).map(normPos),primary:p.primary?normPos(p.primary):((p.pos&&p.pos[0])?normPos(p.pos[0]):null),copies:p.copies}));rebuildRarity(); // v17.8.30: copies now carried through from DEFAULT_DB itself (previously dropped here, so a copies value baked into a DEFAULT_DB row was silently reset to 1 on every fresh load and every Reset-to-default)
   setDBStatus('Default database loaded \u2014 '+playerDB.length+' cards (icons + heroes + all 20 Prem clubs). Type a name to search. Import to add your own, Export to save this set. \u26a0 positions are the least-checked field.','var(--good)');}
 function resetDB(){if(!confirm('Reset the player database to default? This replaces your current database.'))return;loadDefaultDB();_dbSave();_renderCalResult();}
 function exportDB(){_namedDownload(new Blob([JSON.stringify(playerDB)],{type:'application/json'}),'pacwyn-db','json');}
@@ -6003,9 +6049,9 @@ function openDBEdit(i,rowEl){
     <label style="font-size:11px;color:var(--mut);display:block;margin-bottom:3px">Positions</label>
     <div style="margin-bottom:8px;line-height:1.8">${posChks}</div>
     <div class="row" style="gap:8px;align-items:flex-end;margin-bottom:8px">
-      <div style="flex:2"><label style="font-size:11px;color:var(--mut);display:block;margin-bottom:3px">Primary position <span style="color:var(--mut)">&mdash; options are limited to positions ticked above</span></label>
+      <div style="flex:2"><label style="font-size:11px;color:var(--mut);display:block;margin-bottom:3px">Primary position</label>
       <select id="dbe-primary" style="font-size:13px"></select></div>
-      <div style="flex:1"><label style="font-size:11px;color:var(--mut);display:block;margin-bottom:3px">Copies <span style="color:var(--mut)">&mdash; identical prints</span></label>
+      <div style="flex:1"><label style="font-size:11px;color:var(--mut);display:block;margin-bottom:3px">Copies</label>
       <input id="dbe-copies" type="number" value="${p.copies&&p.copies>1?p.copies:1}" inputmode="numeric" min="1" autocomplete="off" style="font-size:13px"></div>
     </div>
     <div class="row" style="gap:6px">
