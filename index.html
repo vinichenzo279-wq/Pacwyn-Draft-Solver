@@ -77,7 +77,7 @@
         before, never as a plan. Read section G first so you understand what a correct entry looks
         like before you write one.
 
-     2. INDEX (at the top of the FOR FUTURE MAINTAINERS block): one line per section A-X. Skim it
+     2. INDEX (at the top of the FOR FUTURE MAINTAINERS block): one line per section A-Z. Skim it
         to identify which sections are relevant to your task. For ANY significant change, also read
         section M (philosophy) regardless of what else you land on.
 
@@ -124,7 +124,7 @@
 <meta property="og:description" content="DraftSolver">
 <!-- VERSION: bump this AND the matching v-number in the <h1><span> below on every patch, however
      small — see the longer note next to the <h1> for why this matters. -->
-<title>Draft Solver v17.8.35</title>
+<title>Draft Solver v17.8.37</title>
 <!-- ABOUT THIS APP / DATA SOURCE:
      This tool is for PACWYN, a game that heavily parallels EA FC but is NOT FC — it uses FC's
      real player cards as a base and adds its own exclusive cards on top. That's why FC data is a
@@ -324,7 +324,7 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
 
        READING ORDER FOR FUTURE MAINTAINERS (added v15.1.8): this file's version history has grown
        long enough that reading it all, every time, is no longer the efficient way in. Skip straight
-       to the "FOR FUTURE MAINTAINERS — KEY REFERENCE MATERIAL" block (lettered sections A-T) first
+       to the "FOR FUTURE MAINTAINERS — KEY REFERENCE MATERIAL" block (lettered sections A-Z) first
        — it holds the durable, still-relevant knowledge, kept up to date on purpose so it doesn't
        require reading the changelog to reconstruct. Only come back to the CHANGELOG blocks below
        (or the historical pre-v8.12 log) when you need the specific detail of one particular past
@@ -2804,6 +2804,8 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
          V. Known, unfixed looseness bug in spMaxFreeBox (isolated-component testing).
          W. Full-solver soundness re-run against the live harness (contrast with V).
          X. Final tiered soundness testing results/conclusion.
+         Y. Maximum-size 23x5 / 115-player full-search result and what it proves.
+         Z. Deferred deep-search resume/stop/partial-result and deadweight-advice ideas, including a clean design sketch.
 
        A. NO-HOLD / PICK-TIME WEIGHTS AUDIT — full write-up: v12.4.2 CHANGELOG entry above.
           Condensed for quick reference: if a future year/system removes the hold mechanic (every
@@ -4215,6 +4217,101 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
           CONCLUSION: as of v17.8.1, the soundness test was a success.
   -->
 
+  <!-- FOR FUTURE MAINTAINERS —
+       Y. MAXIMUM-SIZE FULL-SEARCH RESULT (added v17.8.36, documentation only). A completely
+          populated 23x5 draft — all 23 holds containing 5 cards, the supported maximum of 115
+          players — completed a full Search to the end in the current solver at 8.443 billion
+          nodes, taking 5.992 million ms. Because this is the largest board the app can represent,
+          the result establishes that every supported draft size can, in principle, be exhaustively
+          searched by this version. It is a feasibility result, not a promise that every device or
+          every maximum draft will finish in a convenient amount of time.
+
+          The same run had already found the eventual maximum-scoring squad by node 85 million.
+          The remaining ~8.358 billion nodes did not improve the answer; they only completed the
+          proof that no better squad existed. This is why v17.8.36 moves the capped-search message
+          "Going much deeper may ... not be worthwhile" from the first escalation above 30M to the
+          first escalation above 100M: even this maximum-size stress case found its final best XI
+          before 100M nodes. The separate 30M long-search confirmation gates are unchanged.
+  -->
+
+  <!-- FOR FUTURE MAINTAINERS —
+       Z. DEFERRED DEEP-SEARCH RESUME / STOP / PARTIAL-RESULT / DEADWEIGHT-ADVICE IDEAS
+          (added v17.8.36; expanded v17.8.37, documentation only — DO NOT IMPLEMENT YET).
+          Potential items to review later:
+            1. Make each 3x escalation continue from the exact frontier where the preceding search
+               stopped, instead of beginning a fresh traversal. Reusing the previous best score as
+               a seed is useful pruning, but it is not true continuation.
+            2. Add a Stop control for long serial/deep searches, not only the parallel-worker path.
+            3. When a parallel search is stopped, still render the best complete XI found so far,
+               including work from workers that were still running at the moment Stop was pressed.
+            4. Upgrade the 50+ card deadweight warning so it can identify likely deadweight options
+               and advise which specific cards to remove, instead of only reporting the board size.
+               Possible evidence includes options whose evaluations are consistently dominated because
+               they repeatedly create chemistry clashes, and cards that never appear in any best or
+               top-scoring XI observed during the solve. This is advisory only and is also deferred.
+
+          CURRENT STATUS / DEFERRAL: previous attempts at these ideas repeatedly achieved one part
+          only by breaking something more important — correctness, cap accounting, result rendering,
+          escalation behavior, worker teardown, or the normal solve/tie/manager pipeline. They are
+          intentionally deferred as too risky and structurally invasive for now. Do not bolt them
+          onto the existing callbacks or add a cosmetic Stop button without first refactoring the
+          search architecture and re-running the full soundness harness.
+
+          CLEAN THEORY FOR A FUTURE IMPLEMENTATION:
+            - Represent a solve as an explicit resumable session rather than a recursive call that
+              owns all state on the JavaScript call stack. The session would need a serializable DFS
+              frontier plus the candidate order, used-hold state, chemistry/count accumulators,
+              incumbent score and bestXIs, nodes consumed, RC, skip-ties/diversity mode, root
+              partition, and a hash of the draft/formation/settings. A 3x escalation would extend
+              that same session's total budget and resume its saved frontier. Any hash mismatch
+              would invalidate the checkpoint and force a clean restart.
+            - Run even the nominally serial deep search in one worker, or process it in bounded
+              cooperative chunks. Workers should periodically publish monotonic progress snapshots
+              (best score + complete best XI(s) + nodes and required metadata), then yield so they
+              can receive a stop request. Stop should be a handshake: request stop, let each worker
+              finish its current chunk and send a final snapshot, merge those snapshots on the main
+              thread, and only then terminate the workers. Feed the merged result through the same
+              canonical result/layout/tie/manager path as a normal capped result, marked capped and
+              stoppedEarly, rather than inventing a second partial-result renderer.
+            - For parallel continuation, checkpoint every root partition separately and preserve
+              exact per-worker/global node accounting. A shared incumbent may safely improve pruning,
+              but every resumed frontier node must still re-check its bound against that incumbent.
+            - Build deadweight advice as a separate, explainable post-solve analysis rather than part
+              of pruning. Track option-level participation in complete best/tied XIs and aggregate the
+              evaluation/clash reasons that repeatedly suppress each option. Suggestions should carry
+              confidence labels: strong only after an exhaustive, tie-complete search; heuristic after
+              a capped, skip-ties, diversity, stopped, or partial parallel run. Suggest removals only —
+              never remove automatically — and keep the analysis option-level inside each hold.
+
+          WHY THE OBVIOUS VERSIONS USUALLY FAIL:
+            - solveBest is currently a synchronous recursive DFS. Its real continuation point lives
+              in the call stack and closure-local mutable arrays/sets, so a score seed cannot resume
+              it and the browser cannot serialize its frontier after the fact.
+            - A main-thread DFS blocks the event loop, so an outside Stop button cannot receive its
+              click until the search has already returned. A worker running one monolithic DFS also
+              cannot process a normal stop message until that call returns. SharedArrayBuffer/Atomics
+              polling could bypass that, but it is not reliably available to this standalone local
+              HTML without cross-origin isolation, so it is not a clean portable answer.
+            - The current worker posts only once, after solveBest finishes. terminate() therefore
+              destroys the best XI still held inside an unfinished worker; _stopParallelSolve() can
+              merge only workers that already reported. Periodic snapshots plus a cooperative stop
+              acknowledgement are required to preserve in-flight work.
+            - A partial `{best,bestXIs}` object is not enough for the normal UI. Downstream code also
+              assumes canonical slots/layout, node/cap state, maxRating/ubRating, tie data, manager
+              analysis, and recreation-log consistency. Bypassing those assumptions produces a
+              result that looks usable but breaks later actions or reports misleading proof status.
+            - Retrofitting checkpoints into the present recursion risks changing traversal order,
+              pruning timing, tie collection, diversity behavior, and parallel budget semantics.
+              That is why a clean iterative/chunked solver core plus regression and soundness tests
+              should come before any user-facing resume/stop feature.
+            - "Never appeared in a top squad" is not proof of deadweight when a search was capped,
+              stopped, run with skip-ties/diversity, or merged from incomplete workers; an unvisited
+              equal or better branch may still need that card. Likewise, helper evaluations and clash
+              labels are context-dependent: removing another option or changing the XI can reverse
+              them. The current solver does not retain complete per-card participation/proof metadata,
+              so a naive suggestion list can confidently recommend removing a useful card.
+  -->
+
   <!-- left in section C's place above). Superseded by section H; kept here only for the rare case
        someone needs to check a reported miss against this exact original harness run.
 
@@ -4593,7 +4690,19 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
        purely groundwork. A same-NATION check (same name + same primary + different nation = treat
        as different people) was discussed as a cheaper, if imperfect, alternative and left as a
        future consideration for a DB refresh (e.g. 2027) rather than implemented now. -->
-  <h1 class="cap">&#11041; Draft Solver <span style="font-size:11px;opacity:.55;font-weight:400;letter-spacing:0">v17.8.35</span></h1>
+  <!-- v17.8.36 -- DOCUMENTATION/UI COPY ONLY, no solver-search behavior changed. Added Future
+       Maintainers sections Y and Z: Y records the completed 23x5 / 115-player maximum-board full
+       search (8.443B nodes in 5.992M ms, final best XI already found by 85M); Z records the deferred
+       true-resume, non-worker Stop, and stopped-worker best-XI ideas, with a clean architecture sketch
+       and the reasons previous approaches break more important behavior. Also moved only the capped-
+       search message's "going much deeper may not be worthwhile" threshold from >30M to >100M; the
+       actual 30M long-search confirmation gates and all search logic remain unchanged. -->
+  <!-- v17.8.37 -- DOCUMENTATION ONLY, no solver/UI behavior changed. Expanded section Z with the
+       deferred idea for the 50+ card deadweight warning to identify likely deadweight and suggest
+       specific removals using repeated-clash/evaluation evidence and participation in top-scoring XIs.
+       Added a cautious post-solve design and documented why capped, skip-ties, diversity, stopped, or
+       partial-worker searches make naive "never selected" advice unreliable. -->
+  <h1 class="cap">&#11041; Draft Solver <span style="font-size:11px;opacity:.55;font-weight:400;letter-spacing:0">v17.8.37</span></h1>
   <div class="cap sub">pacwyn draft optimiser</div>
   <div style="position:absolute;right:2px;top:40px;text-align:right;font-size:10px;line-height:1.5;color:var(--mut)">Created by <b style="color:var(--ink)">Chenzo</b><br><span style="opacity:.8">Special thanks to BWFCPackfan</span></div>
 </header>
@@ -9236,7 +9345,7 @@ function maxPossibleRating(pool,form){
 }
 function _cappedWarnHTML(cap){
   const nextCap=cap*3;
-  const note=nextCap>30000000?'Going much deeper may take very long and may not be worthwhile.':'Jumping to '+(nextCap/1000000)+'M has improved results in practice.';
+  const note=nextCap>100000000?'Going much deeper may take very long and may not be worthwhile.':'Jumping to '+(nextCap/1000000)+'M has improved results in practice.';
   return '<div class="note" style="border-color:var(--warn);margin-bottom:10px"><b>\u26a0 Search capped at '+(cap/1000000)+'M nodes</b> \u2014 this is the best found so far. '+note
     +'<div class="row" style="margin-top:8px;gap:8px;flex-wrap:wrap">'
     +'<button class="btn sm" onclick="runSolve('+nextCap+')">Keep searching ('+(nextCap/1000000)+'M)</button>'
