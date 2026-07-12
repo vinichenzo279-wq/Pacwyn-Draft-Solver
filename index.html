@@ -124,7 +124,7 @@
 <meta property="og:description" content="DraftSolver">
 <!-- VERSION: bump this AND the matching v-number in the <h1><span> below on every patch, however
      small — see the longer note next to the <h1> for why this matters. -->
-<title>Draft Solver v17.8.62</title>
+<title>Draft Solver v17.8.64</title>
 <!-- ABOUT THIS APP / DATA SOURCE:
      This tool is for PACWYN, a game that heavily parallels EA FC but is NOT FC — it uses FC's
      real player cards as a base and adds its own exclusive cards on top. That's why FC data is a
@@ -2805,7 +2805,7 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
          W. Full-solver soundness re-run against the live harness (contrast with V).
          X. Final tiered soundness testing results/conclusion.
          Y. Maximum-size 23x5 / 115-player full-search result and what it proves.
-         Z. Deferred deep-search resume/stop/partial-result ideas (items 2+3 implemented v17.8.41 via snapshot/terminate; item 5's Stop-does-nothing bug root-caused and fixed v17.8.45 — _swallowIfBusy was eating the click; item 6 — the bench/manager pass's own Worker + running count + always-on Stop — added v17.8.50, implemented v17.8.51 via the same publish-then-terminate re-scoping; item 1 REJECTED PERMANENTLY v17.8.57 — bounded benefit, unbounded silent-false-proof risk; item 4's chemistry-clash evidence still deferred; item 7 ADDED v17.8.59, DEFERRED, then ATTEMPTED v17.8.61 — sub-idea (a) found infeasible (a busy worker can't receive inbound messages mid-DFS), (b) shared-atomic-incumbent and (c) bound-sorted root partitioning IMPLEMENTED, fuzz-verified off-tree but not yet the full 12-regime harness) + deadweight-advice (participation-based half implemented v17.8.38, fixed v17.8.39, folded into the existing pool-size warning v17.8.40; eval-based “true deadweight” half implemented v17.8.53 — works at pick time too), including a clean design sketch for the rest.
+         Z. Deferred deep-search resume/stop/partial-result ideas (items 2+3 implemented v17.8.41 via snapshot/terminate; item 5's Stop-does-nothing bug root-caused and fixed v17.8.45 — _swallowIfBusy was eating the click; item 6 — the bench/manager pass's own Worker + running count + always-on Stop — added v17.8.50, implemented v17.8.51 via the same publish-then-terminate re-scoping; item 1 REJECTED PERMANENTLY v17.8.57 — bounded benefit, unbounded silent-false-proof risk; item 4's chemistry-clash evidence still deferred; item 7 ADDED v17.8.59, DEFERRED, then ATTEMPTED v17.8.61 — sub-idea (a) found infeasible (a busy worker can't receive inbound messages mid-DFS), (b) shared-atomic-incumbent and (c) bound-sorted root partitioning IMPLEMENTED, fuzz-verified off-tree but not yet the full 12-regime harness; item 8 ADDED v17.8.64, DEFERRED — completeOOP's in-position sub-solve still has no Worker/Stop, unlike the main solve and bench/manager pass) + deadweight-advice (participation-based half implemented v17.8.38, fixed v17.8.39, folded into the existing pool-size warning v17.8.40; eval-based “true deadweight” half implemented v17.8.53 — works at pick time too), including a clean design sketch for the rest.
 
        A. NO-HOLD / PICK-TIME WEIGHTS AUDIT — full write-up: v12.4.2 CHANGELOG entry above.
           Condensed for quick reference: if a future year/system removes the hold mechanic (every
@@ -4256,7 +4256,11 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
           infeasible on investigation (a worker mid-DFS cannot receive an inbound postMessage), so
           (b) SHARED ATOMIC INCUMBENT was implemented as its corrected realization, plus (c)
           BOUND-SORTED ROOT PARTITIONING; both fuzz-verified off-tree against an independent brute
-          force but NOT yet run through the full 12-regime harness per F.2/Q.2.)
+          force but NOT yet run through the full 12-regime harness per F.2/Q.2. Item 8 ADDED
+          v17.8.64 as a DEFERRED backlog item -- completeOOP's in-position sub-solve is still a
+          synchronous main-thread solveWithDiversity() call with no Worker and no Stop button,
+          unlike the main solve (items 2/3) and the bench/manager pass (item 6); see the item for
+          the proposed approach, not yet attempted.)
           Potential items to review later:
             1. Make each 3x escalation continue from the exact frontier where the preceding search
                stopped, instead of beginning a fresh traversal. Reusing the previous best score as
@@ -4505,6 +4509,34 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
                is treated as release-final -- flagged here the same way h2NodeBound/UB-R2 above flag
                their own pending-harness status. Do not treat this as fully proven until that harness
                runs clean.
+
+            8. (added v17.8.64, DEFERRED -- not attempted) MAKE THE EMERGENCY-FILL (completeOOP)
+               IN-POSITION SUB-SOLVE STOP-ABLE, THE SAME WAY ITEM 6 DID FOR BENCH/MANAGER.
+               completeOOP() (the "no legal full XI" fallback, entered via _handleSolveResult ->
+               _renderEmergencyFill -> _renderEmergencyFillInner whenever the real solve returns
+               r.error or zero bestXIs) calls solveWithDiversity() SYNCHRONOUSLY on the main thread
+               for its in-position sub-solve. It never goes through _runSolveParallel, never spawns a
+               Worker, and never shows #solverStopBtn -- so a long emergency-fill search (especially
+               the "Search to the end" button, cap=1e12) can hang with literally no way to stop it,
+               the exact class of problem items 2/3/6 already fixed for the main solve and the
+               bench/manager pass. Confirmed by inspection, not yet fixed.
+               PROPOSED APPROACH (unimplemented): completeOOP is mutually exclusive with both _parRun
+               and _benchRun for the same reason item 6's pass is -- it only ever starts after the
+               main solve has already finished or been stopped -- so the identical re-scoping applies:
+               wrap the in-position solveWithDiversity() call in its own dedicated Worker (mirroring
+               _buildBenchWorkerBlob/_analyzeTiesAsync's shape: postMessage the sub-form/cards/cap/
+               seed in, periodic onSnapshot-style progress back, a final message on completion),
+               route the shared #solverStopBtn to it the same way _stopParallelSolve already checks
+               _benchRun first (add an _oopRun check alongside it), and keep today's synchronous
+               completeOOP() as the no-Worker-support/failure fallback -- same pattern every other
+               item in this section already uses. The OOP brute-force permutation stage AFTER the
+               in-position solve (permuteOOP(), scoring spare-card assignments into uncoverable slots)
+               is out of scope for this item: it is already its own nodeCap-bounded loop over a
+               typically small sparePool, cheap relative to the in-position DFS, so it was left
+               synchronous the same way item 6 left its own small fixed-cost pieces alone. NOT
+               IMPLEMENTED -- deferred pending confirmation this is worth the same worker-blob/
+               message-protocol/teardown machinery item 6 already paid for once; flagged here so a
+               future pass doesn't have to re-derive the diagnosis from scratch.
 
           CURRENT STATUS / DEFERRAL (item 1, and item 4's aggregated clash-reason evidence): previous
           attempts at these ideas repeatedly achieved one part only by breaking something more
@@ -5388,7 +5420,30 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
        parallel runs, and only when the browser's isolation headers make SharedArrayBuffer
        available. -->
   <!-- v17.8.62 -- DB: added Frimpong 96 Netherlands Liverpool RB/RW/RM normal card (using the existing DB spelling, not the request typo "Frimping"). -->
-  <h1 class="cap">&#11041; Draft Solver <span style="font-size:11px;opacity:.55;font-weight:400;letter-spacing:0">v17.8.62</span></h1>
+  <!-- v17.8.63 -- BUGFIX: _runSolveParallel's worker count W used Math.max(2,Math.min(_parWorkerCount(),rootCands.length)),
+       which FORCED at least 2 workers even when the root slot (fewest-eligible-card slot, e.g. GK
+       with a single eligible card) had only 1 real candidate. Round-robin partitioning then put that
+       1 candidate in parts[0] and left parts[1] empty; the empty-partition worker returned instantly
+       with ~0 nodes while the real worker got the ENTIRE search tree but perCap=ceil(cap/W) only gave
+       it HALF the user's configured node cap. Because the aggregate node count (~half the cap) then
+       came in under the global cap, _finishParallel's capped/workerCapSoft check (nodes>=cap) reported
+       a "likely complete, soft cap" result even though the one worker that mattered was genuinely
+       starved at half budget -- a false completed-search message. Fixed by changing the floor from
+       Math.max(2,...) to Math.max(1,...): W is now never forced above rootCands.length, so when
+       there's only 1 (or 0) real root candidate, W collapses to 1 and that single worker gets the
+       FULL cap (identical no-partition path to forceW===1), matching the true serial-tree semantics.
+       This also makes every partition non-empty whenever W>1, which is the precondition the
+       nodes>=cap completeness check at _finishParallel already relied on but hadn't been guaranteed
+       until now (see comment there). -->
+  <h1 class="cap">&#11041; Draft Solver <span style="font-size:11px;opacity:.55;font-weight:400;letter-spacing:0">v17.8.64</span></h1>
+  <!-- v17.8.64 -- DOCUMENTATION ONLY, no logic/UI change. Added item 8 to section Z of the FOR
+       FUTURE MAINTAINERS block (backlog, DEFERRED): completeOOP's in-position sub-solve
+       (solveWithDiversity, called synchronously from _renderEmergencyFillInner) has no Worker and
+       no Stop button, unlike the main solve (items 2/3) and the bench/manager pass (item 6) — a
+       long emergency-fill search, especially "Search to the end" (cap=1e12), can hang with no way
+       to stop it. Proposed approach sketched (mirror _analyzeTiesAsync/_benchRun's worker-blob +
+       shared-Stop-button pattern), not yet implemented. Also updated section Z's own header
+       summary and the top-of-file section INDEX one-liner to reference item 8. -->
   <div class="cap sub">pacwyn draft optimiser</div>
   <div style="position:absolute;right:2px;top:40px;text-align:right;font-size:10px;line-height:1.5;color:var(--mut)">Created by <b style="color:var(--ink)">Chenzo</b><br><span style="opacity:.8">Special thanks to BWFCPackfan</span></div>
 </header>
@@ -7616,7 +7671,7 @@ function scoreXI(xi){
 }
 
 /* ============================ SOLVER (DFS + bound) ============================ */
-function solveBest(form,cards,nodeCap,ratingCeil,seedBest,seedXIs,skipTies,diversitySeed,rootAllow,onSnapshot,sharedFloor){
+function solveBest(form,cards,nodeCap,ratingCeil,seedBest,seedXIs,skipTies,diversitySeed,rootAllow,onSnapshot,sharedFloor,rootSlotIdx){
   // v17.8.61 (section Z item 7, corrected realization of idea (a) -- see FOR FUTURE MAINTAINERS):
   // sharedFloor is an OPTIONAL Int32Array view onto a SharedArrayBuffer, present ONLY when the
   // parallel worker path detected crossOriginIsolated + SharedArrayBuffer support (see
@@ -7693,11 +7748,19 @@ function solveBest(form,cards,nodeCap,ratingCeil,seedBest,seedXIs,skipTies,diver
   }
   const order=slots.map((s,i)=>i).sort((a,b)=>cand[a].length-cand[b].length);
   // v14.0 (beta) — parallel-search partition hook: when rootAllow (a Set of card ids) is supplied,
-  // the ROOT slot's candidate list is restricted to those cards. Used ONLY by _runSolveParallel to
-  // split one huge search across Web Workers: each worker owns a disjoint share of the root
+  // a slot's candidate list is restricted to those cards. Used ONLY by _runSolveParallel to split
+  // one huge search across Web Workers: each worker owns a disjoint share of that slot's
   // candidates, so the union of the workers' subtrees is exactly the full serial tree (every legal
-  // XI has exactly one card in the root slot). Undefined -> byte-identical behavior to before.
-  if(rootAllow){const _ri=order[0];cand[_ri]=cand[_ri].filter(c=>rootAllow.has(c.id));
+  // XI has exactly one card in that slot, whichever slot it is). Undefined -> byte-identical
+  // behavior to before.
+  // v17.8.63: which slot gets restricted is now the caller's choice (rootSlotIdx), defaulting to
+  // order[0] (fewest-candidates, best-pruning slot) when omitted -- byte-identical to the old
+  // hardcoded behavior. _runSolveParallel uses this to pick a DIFFERENT, bigger-pooled slot as the
+  // partition axis when order[0] doesn't have enough distinct candidates to divide across the
+  // requested worker count (see its own comment for why order[0] alone isn't always the right
+  // partition axis even though it's still the right DFS visiting order -- restricting cand[] for
+  // any slot index narrows that slot's pool the same way regardless of its rank in `order`).
+  if(rootAllow){const _ri=(typeof rootSlotIdx==='number')?rootSlotIdx:order[0];cand[_ri]=cand[_ri].filter(c=>rootAllow.has(c.id));
     if(cand[_ri].length===0)return {best:(typeof seedBest==="number"&&seedBest>=0)?seedBest:-1,bestXIs:(seedXIs&&seedXIs.length)?seedXIs.slice():[],nodes:0,capped:false,slots,maxRating:-1,rcUsed:RC,participatedIds:(seedXIs&&seedXIs.length)?Array.from(new Set(seedXIs.flatMap(x=>x.xi.map(c=>c.id)))):[],triedIds:(seedXIs&&seedXIs.length)?Array.from(new Set(seedXIs.flatMap(x=>x.xi.map(c=>c.id)))):[]};}
   // v6 UB precompute — per remaining slot, the OLD bound assumed a flat "+2" for anything
   // that wasn't the one reserved "first icon"/"first hero" slot. That's safe (never an
@@ -8230,7 +8293,7 @@ function _buildSolverWorkerBlob(){
     // work while a worker is mid-DFS. d.sharedFloor is undefined whenever the main thread's
     // crossOriginIsolated/SharedArrayBuffer feature-detect failed, in which case solveBest's own
     // sharedFloor param is simply absent and this is byte-identical to before.
-    +'const r=solveBest(d.form,d.cards,d.nodeCap,d.ratingCeil,d.seedBest,d.seedXIs,d.skipTies,undefined,allow,function(s){s.progress=true;postMessage(s);},d.sharedFloor);'
+    +'const r=solveBest(d.form,d.cards,d.nodeCap,d.ratingCeil,d.seedBest,d.seedXIs,d.skipTies,undefined,allow,function(s){s.progress=true;postMessage(s);},d.sharedFloor,d.rootSlotIdx);'
     +'postMessage({best:r.best,bestXIs:(r.bestXIs||[]).map(x=>({xi:x.xi,sc:x.sc})),nodes:r.nodes,capped:!!r.capped,maxRating:r.maxRating,participatedIds:r.participatedIds||[],triedIds:r.triedIds||[],error:r.error||null});};';
   return URL.createObjectURL(new Blob([src],{type:'application/javascript'}));
 }
@@ -8259,10 +8322,30 @@ function _runSolveParallel(cap,ratingCeil,reuseSeed,forceW){
   // behavior untouched (workers need the shared upfront seed — see the v14.0 block comment above).
   else if(forceW===1){_seed=(cap>2000000)?_probeFloor(form,sortedCards,ratingCeil):null;}
   else {_seed=_probeFloor(form,sortedCards,ratingCeil);}
-  // root slot = fewest candidates (same stable-sort rule as solveBest's order[])
   const candLists=form.slots.map(s=>sortedCards.filter(c=>c.pos.includes(s)));
   const order=form.slots.map((s,i)=>i).sort((a,b)=>candLists[a].length-candLists[b].length);
-  const rootCands=candLists[order[0]];
+  // v17.8.63: partition axis selection. order[0] (fewest candidates) is still the right slot for the
+  // DFS's own visiting order (best pruning), but it is NOT always the right slot to PARTITION on --
+  // e.g. a GK slot with exactly 1 eligible card can't be divided across any number of workers. Rather
+  // than collapsing straight to a serial 1-worker run whenever order[0] is too small, walk forward
+  // through `order` and use the EARLIEST slot that has enough distinct candidates to actually cover
+  // the requested worker count. This is safe regardless of which slot we pick: every slot's candidate
+  // list is independent (position-eligibility only; duplicate-card/group conflicts are resolved by
+  // the DFS's own usedGroups check at runtime, not upfront), so restricting ANY one slot's cand[] to a
+  // disjoint partition of its candidates is still an exhaustive, non-overlapping split of the full
+  // search space -- every legal XI has exactly one card in that slot, whichever slot it is. Falls back
+  // to whichever slot has the MOST candidates if none reach the requested count, so a heavily
+  // constrained squad (several slots all down to a handful of cards) still gets as much real
+  // parallelism as its shape allows instead of forcing more workers than any single slot supports.
+  const wanted=(forceW===1)?1:_parWorkerCount();
+  let axisPos=0,axisBest=0;
+  for(let i=0;i<order.length;i++){
+    const n=candLists[order[i]].length;
+    if(n>axisBest){axisBest=n;axisPos=i;}
+    if(n>=wanted){axisPos=i;break;}
+  }
+  const rootSlotIdx=order[axisPos];
+  const rootCands=candLists[rootSlotIdx];
   // v17.8.61 (section Z item 7c): sort root candidates by a cheap static quality proxy (rating,
   // nation/club rarity tie-break — the same divstatic proxy solveBest's own per-slot presort already
   // uses) before round-robin partitioning across workers, instead of leaving them in whatever order
@@ -8281,7 +8364,21 @@ function _runSolveParallel(cap,ratingCeil,reuseSeed,forceW){
      const kb=b.rating+0.4/(__rn[b.nation]||1)+(b.type==='normal'?0.4/(__rc[b.club]||1):0);
      return kb-ka;
    });}
-  const W=(forceW===1)?1:Math.max(2,Math.min(_parWorkerCount(),rootCands.length));
+  // v17.8.63 BUGFIX: this used to be Math.max(2,...), which FORCED W to at least 2 even when the
+  // partition axis had only 1 (or 0) real candidates. With only 1 candidate, round-robin
+  // partitioning below put it in parts[0] and left parts[1] empty -- an empty partition needs no
+  // search and returns instantly, but perCap=ceil(cap/W) still divided the user's whole node budget
+  // by that phantom worker count, so the ONE worker that owned the entire real tree only ever got
+  // HALF the cap the user configured. Worse, _finishParallel's capped/workerCapSoft check below
+  // (nodes>=cap) then read the starved worker's under-half-cap node count as "aggregate finished
+  // under budget" and reported a soft/likely-complete result even though the real tree was never
+  // close to exhausted. Fixed two ways together: (1) the axis-selection loop above now picks a
+  // bigger-pooled slot instead of blindly using order[0], so this collapse to W=1 should be rare in
+  // practice; (2) even in the residual case where NO slot has enough candidates, W is no longer
+  // forced above what the chosen axis can actually support -- if that's 1, W collapses to 1 (same
+  // no-partition path as forceW===1) and that single worker gets the FULL cap, matching the true
+  // serial-tree semantics, instead of a phantom empty worker silently halving the real budget.
+  const W=(forceW===1)?1:Math.max(1,Math.min(_parWorkerCount(),rootCands.length));
   const parts=(W===1)?[null]:Array.from({length:W},()=>[]); // W===1: null = no root partition (full serial tree)
   if(W>1)rootCands.forEach((c,i)=>parts[i%W].push(c.id));
   const perCap=Math.max(1,Math.ceil(cap/W));
@@ -8336,7 +8433,7 @@ function _runSolveParallel(cap,ratingCeil,reuseSeed,forceW){
     };
     w.postMessage({form:{name:form.name,slots:form.slots.slice()},cards:sortedCards,nodeCap:perCap,
       ratingCeil:ratingCeil,seedBest:_seed?_seed.seedBest:undefined,seedXIs:_seed&&_seed.seedXIs?_seed.seedXIs:undefined,
-      skipTies:_skipTies(),rootAllowIds:ids,sharedFloor:_sharedFloorBuf||undefined});
+      skipTies:_skipTies(),rootAllowIds:ids,rootSlotIdx:rootSlotIdx,sharedFloor:_sharedFloorBuf||undefined});
     return w;
   });
   if(run.workers.some(w=>!w)){ if(!run.failed&&!run.stopped){run.failed=true;teardown();_runSolveInner(cap,ratingCeil,reuseSeed);} }
@@ -8409,6 +8506,12 @@ function _finishParallel(results,form,sortedCards,cap,ratingCeil,t0,out,W,perCap
   // escalation box and its x3 offer) only when the aggregate genuinely reached the global cap;
   // otherwise the box overstated the situation and pointed at a cap we never hit. The serial path
   // and the diversity/bench/manager paths never route through _finishParallel, so they're untouched.
+  // v17.8.63: this comparison is only valid when every spawned partition is non-empty (so the
+  // global cap is genuinely divided across real work, not "shared" with a phantom worker that had
+  // nothing to search). That's now guaranteed by the W fix above -- W is never allowed to exceed
+  // rootCands.length, so round-robin partitioning always gives every one of the W workers at least
+  // one root candidate. Before that fix, W could exceed rootCands.length (forced floor of 2), which
+  // is what let a starved, empty-partition worker make this look under-budget when it wasn't.
   const capped=anyWorkerCapped&&nodes>=cap;
   // v17.6.7: when a worker hit its per-worker cap but the AGGREGATE stayed under the global cap,
   // capped is (correctly) false -- but the result still isn't PROVEN optimal (a starved worker's
