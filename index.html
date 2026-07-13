@@ -58,9 +58,14 @@
           assume "normal".)
 
        7. VERSION + CHANGELOG. Bump ONLY the third version segment in BOTH the <title> and the
-          <h1><span> (e.g. 17.8.26 -> 17.8.27). Add a one-line changelog entry above the <h1> naming
-          the card(s) touched. Do not touch the solver, the harness, the appendix, or any lettered
-          section. Done.
+          <h1><span> (e.g. 17.8.26 -> 17.8.27). Add a one-line changelog entry ABOVE the <h1> naming
+          the card(s) touched -- specifically, as the very LAST entry in the run of entries that
+          sits directly above the <h1> (i.e. immediately below the highest-numbered existing entry,
+          immediately above the <h1> tag itself), never after the <h1>. Entries have drifted to
+          the wrong side of the <h1> (and out of order) more than once -- see CHANGELOG CONVENTION
+          / the v14.1.1 and v17.8.68 reorder entries -- so treat "last entry, directly above <h1>,
+          nothing else moved" as a hard rule, not a suggestion. Do not touch the solver, the
+          harness, the appendix, or any lettered section. Done.
 
      (Full rationale for each rule is in section I below, but you should not need it for a routine
      card edit — the six steps above are the whole job. If your task is ANYTHING other than a pure
@@ -124,7 +129,7 @@
 <meta property="og:description" content="DraftSolver">
 <!-- VERSION: bump this AND the matching v-number in the <h1><span> below on every patch, however
      small — see the longer note next to the <h1> for why this matters. -->
-<title>Draft Solver v17.8.64</title>
+<title>Draft Solver v17.8.69</title>
 <!-- ABOUT THIS APP / DATA SOURCE:
      This tool is for PACWYN, a game that heavily parallels EA FC but is NOT FC — it uses FC's
      real player cards as a base and adds its own exclusive cards on top. That's why FC data is a
@@ -321,6 +326,30 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
        being able to scan "which version's summary mentions touching this code path" narrows down
        the culprit far faster than bisecting blind. Keep entries short; the "why" belongs in the
        inline code comments near the change, not here.
+
+       PLACEMENT (tightened v17.8.68, after entries drifted to the wrong side of the <h1> and out
+       of order more than once — see the v14.1.1 and v17.8.68 reorder entries for the concrete
+       incidents): a new entry is always inserted as the LAST entry in the run of dated entries that
+       sits directly above the <h1> tag — i.e. immediately below the current highest version number,
+       immediately above <h1> itself — in strictly increasing version order. NEVER append below/
+       after the <h1>; that spot is markup (title/subtitle/header), not changelog, even though
+       nothing stops a comment from being pasted there. Before adding an entry, confirm the entry
+       immediately above where you're about to insert is in fact the current highest version — don't
+       just assume the end of the file (or the end of some other block) is the right spot.
+
+       NOT PART OF THE CHANGELOG (also clarified v17.8.68): a handful of inline comments elsewhere
+       in this file — inside the UI markup and occasionally in the script — reuse the same
+       "<!-- vX.Y.Z — ..." format to document a specific element or code path IN PLACE (e.g. the
+       v16.13.4/v16.14.2/v16.15.0 comments inside the "Advanced — solver settings" markup, well
+       after the <h1>). These are deliberate, useful local context (a maintainer touching that
+       element sees the history right there instead of having to search the changelog), NOT
+       duplicate or misplaced changelog entries — leave them exactly where they are, don't move or
+       delete them, and don't merge them into the dated CHANGELOG block. The reliable way to tell
+       the two apart when scanning for "every vX.Y.Z line" (e.g. to check ordering): a real
+       changelog entry is one of the entries living above the <h1> (or, for pre-v8.12 history,
+       inside the HISTORICAL CHANGELOG block below) — a "vX.Y.Z" comment found anywhere else in the
+       file is inline context, not a changelog entry, and should be excluded from any changelog
+       scan/reorder pass.
 
        READING ORDER FOR FUTURE MAINTAINERS (added v15.1.8): this file's version history has grown
        long enough that reading it all, every time, is no longer the efficient way in. Skip straight
@@ -2805,7 +2834,7 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
          W. Full-solver soundness re-run against the live harness (contrast with V).
          X. Final tiered soundness testing results/conclusion.
          Y. Maximum-size 23x5 / 115-player full-search result and what it proves.
-         Z. Deferred deep-search resume/stop/partial-result ideas (items 2+3 implemented v17.8.41 via snapshot/terminate; item 5's Stop-does-nothing bug root-caused and fixed v17.8.45 — _swallowIfBusy was eating the click; item 6 — the bench/manager pass's own Worker + running count + always-on Stop — added v17.8.50, implemented v17.8.51 via the same publish-then-terminate re-scoping; item 1 REJECTED PERMANENTLY v17.8.57 — bounded benefit, unbounded silent-false-proof risk; item 4's chemistry-clash evidence still deferred; item 7 ADDED v17.8.59, DEFERRED, then ATTEMPTED v17.8.61 — sub-idea (a) found infeasible (a busy worker can't receive inbound messages mid-DFS), (b) shared-atomic-incumbent and (c) bound-sorted root partitioning IMPLEMENTED, fuzz-verified off-tree but not yet the full 12-regime harness; item 8 ADDED v17.8.64, DEFERRED — completeOOP's in-position sub-solve still has no Worker/Stop, unlike the main solve and bench/manager pass) + deadweight-advice (participation-based half implemented v17.8.38, fixed v17.8.39, folded into the existing pool-size warning v17.8.40; eval-based “true deadweight” half implemented v17.8.53 — works at pick time too), including a clean design sketch for the rest.
+         Z. Deferred deep-search resume/stop/partial-result ideas (items 2+3 implemented v17.8.41 via snapshot/terminate; item 5's Stop-does-nothing bug root-caused and fixed v17.8.45 — _swallowIfBusy was eating the click; item 6 — the bench/manager pass's own Worker + running count + always-on Stop — added v17.8.50, implemented v17.8.51 via the same publish-then-terminate re-scoping; item 1 REJECTED PERMANENTLY v17.8.57 — bounded benefit, unbounded silent-false-proof risk; item 4's chemistry-clash evidence still deferred; item 7 ADDED v17.8.59, DEFERRED, then ATTEMPTED v17.8.61 — sub-idea (a) found infeasible (a busy worker can't receive inbound messages mid-DFS), (b) shared-atomic-incumbent and (c) bound-sorted root partitioning IMPLEMENTED, fuzz-verified off-tree but not yet the full 12-regime harness; item 8 ADDED v17.8.64, IMPLEMENTED v17.8.65 — completeOOP's in-position sub-solve now runs in its own Worker with the shared Stop button and live progress, sync path kept as fallback; item 9 ADDED v17.8.65 — closing catalogue of parallel/diversity interaction ideas considered and REJECTED or deferred (diversity on multi-worker, diversity on one-worker, cross-product root splits, dynamic work-queue), with failure modes) + deadweight-advice (participation-based half implemented v17.8.38, fixed v17.8.39, folded into the existing pool-size warning v17.8.40; eval-based “true deadweight” half implemented v17.8.53 — works at pick time too), including a clean design sketch for the rest.
 
        A. NO-HOLD / PICK-TIME WEIGHTS AUDIT — full write-up: v12.4.2 CHANGELOG entry above.
           Condensed for quick reference: if a future year/system removes the hold mechanic (every
@@ -3182,7 +3211,10 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
             d. Insert anywhere inside the brackets (placement is load-order-independent). For an edit,
                search the specific row and change it in place.
             e. Bump the THIRD version segment only, in <title> AND <h1><span>; add a one-line
-               changelog entry above the <h1>. Nothing else in the file is touched.
+               changelog entry as the LAST entry directly above the <h1> (see CHANGELOG CONVENTION
+               / PLACEMENT near the top of this file — never after the <h1>, always the highest
+               version number, inserted immediately above the tag). Nothing else in the file is
+               touched.
 
             THE JUDGEMENT RULES (only relevant when an entry looks off — otherwise ignore):
             - DUPLICATES ARE FINE (since v16.0). Do not dedupe, do not skip a row for matching an
@@ -4257,10 +4289,13 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
           (b) SHARED ATOMIC INCUMBENT was implemented as its corrected realization, plus (c)
           BOUND-SORTED ROOT PARTITIONING; both fuzz-verified off-tree against an independent brute
           force but NOT yet run through the full 12-regime harness per F.2/Q.2. Item 8 ADDED
-          v17.8.64 as a DEFERRED backlog item -- completeOOP's in-position sub-solve is still a
-          synchronous main-thread solveWithDiversity() call with no Worker and no Stop button,
-          unlike the main solve (items 2/3) and the bench/manager pass (item 6); see the item for
-          the proposed approach, not yet attempted.)
+          v17.8.64 as a DEFERRED backlog item, then IMPLEMENTED v17.8.65 exactly per its own sketch --
+          completeOOP's in-position sub-solve now runs in a dedicated Worker (_buildOopWorkerBlob /
+          _oopRun / _stopOopRun) with the shared Stop button and live progress, keeping the old
+          synchronous call as the no-Worker/failure fallback; see the item. Item 9 ADDED v17.8.65 --
+          a closing catalogue of the remaining parallel/diversity interaction ideas that were
+          CONSIDERED AND REJECTED (or consciously deferred), with the failure modes, so they are not
+          re-derived from scratch.)
           Potential items to review later:
             1. Make each 3x escalation continue from the exact frontier where the preceding search
                stopped, instead of beginning a fresh traversal. Reusing the previous best score as
@@ -4509,34 +4544,121 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
                is treated as release-final -- flagged here the same way h2NodeBound/UB-R2 above flag
                their own pending-harness status. Do not treat this as fully proven until that harness
                runs clean.
+               UPDATE v17.8.66: the COMPONENT-ISOLATED level of that gap is now closed (new
+               test_A-E harness, see the v17.8.66 changelog entry for full methodology/results) --
+               the root-candidate sort verified lossless+ordered in isolation, sharedFloor forced
+               to its exact boundary values (tie, one-above-unreachable, real sibling-partition
+               floor) instead of sampled randomly, the CAS-max publish loop stress-tested under
+               REAL OS-thread concurrency (not simulated), and a genuine multi-worker_threads
+               pipeline checked against the independent brute-force oracle (54 real multi-thread
+               runs, 0 mismatches). The browser-run, real-playerDB, full twelve-regime + fingerprint
+               harness itself is STILL NOT run -- that remains open per F.2/Q.2 before this is
+               release-final; v17.8.66 raises confidence, it does not close the flag.
 
-            8. (added v17.8.64, DEFERRED -- not attempted) MAKE THE EMERGENCY-FILL (completeOOP)
+            8. (added v17.8.64, DEFERRED -- IMPLEMENTED v17.8.65) MAKE THE EMERGENCY-FILL (completeOOP)
                IN-POSITION SUB-SOLVE STOP-ABLE, THE SAME WAY ITEM 6 DID FOR BENCH/MANAGER.
                completeOOP() (the "no legal full XI" fallback, entered via _handleSolveResult ->
                _renderEmergencyFill -> _renderEmergencyFillInner whenever the real solve returns
-               r.error or zero bestXIs) calls solveWithDiversity() SYNCHRONOUSLY on the main thread
-               for its in-position sub-solve. It never goes through _runSolveParallel, never spawns a
-               Worker, and never shows #solverStopBtn -- so a long emergency-fill search (especially
-               the "Search to the end" button, cap=1e12) can hang with literally no way to stop it,
+               r.error or zero bestXIs) called solveWithDiversity() SYNCHRONOUSLY on the main thread
+               for its in-position sub-solve. It never went through _runSolveParallel, never spawned a
+               Worker, and never showed #solverStopBtn -- so a long emergency-fill search (especially
+               the "Search to the end" button, cap=1e12) could hang with literally no way to stop it,
                the exact class of problem items 2/3/6 already fixed for the main solve and the
-               bench/manager pass. Confirmed by inspection, not yet fixed.
-               PROPOSED APPROACH (unimplemented): completeOOP is mutually exclusive with both _parRun
-               and _benchRun for the same reason item 6's pass is -- it only ever starts after the
-               main solve has already finished or been stopped -- so the identical re-scoping applies:
-               wrap the in-position solveWithDiversity() call in its own dedicated Worker (mirroring
-               _buildBenchWorkerBlob/_analyzeTiesAsync's shape: postMessage the sub-form/cards/cap/
-               seed in, periodic onSnapshot-style progress back, a final message on completion),
-               route the shared #solverStopBtn to it the same way _stopParallelSolve already checks
-               _benchRun first (add an _oopRun check alongside it), and keep today's synchronous
-               completeOOP() as the no-Worker-support/failure fallback -- same pattern every other
-               item in this section already uses. The OOP brute-force permutation stage AFTER the
+               bench/manager pass.
+               IMPLEMENTED v17.8.65 per the approach sketched here in v17.8.64, with these specifics:
+               completeOOP is mutually exclusive with both _parRun and _benchRun for the same reason
+               item 6's pass is -- it only ever starts after the main solve has already finished or
+               been stopped -- so the identical re-scoping applied: the in-position
+               solveWithDiversity() call runs in its own dedicated Worker (_buildOopWorkerBlob,
+               mirroring _buildBenchWorkerBlob/_analyzeTiesAsync's shape: sub-form/cards/cap/seed/
+               skip-ties/diversity-plan posted in, periodic onSnapshot-style progress back with
+               CROSS-PHASE node accumulation, a final message on completion), the shared
+               #solverStopBtn routes to it via an _oopRun check in _stopParallelSolve alongside the
+               existing _benchRun one, and today's synchronous completeOOP() path is kept verbatim as
+               the no-Worker-support/failure fallback -- same pattern every other item in this
+               section already uses. Two details the original sketch didn't spell out, now load-
+               bearing: (a) the blob must serialize solveWithDiversity itself (the bench blob's
+               function list doesn't include it) -- but NOT mkPlan or any main-thread UI readers,
+               since the diversity plan is read once on the main thread and shipped as data; (b) the
+               sub-problem definition (coverable-slot sub-form, rating-desc order, probe seed) was
+               extracted into ONE builder, _oopSubTask, used by BOTH completeOOP's sync path and the
+               worker launcher, and the worker's finished (or Stop-merged partial) result is injected
+               back through completeOOP's new preSub parameter -- so tie-break, spare pool,
+               permuteOOP, and the return shape are the SAME code on both paths, no second assembler
+               to drift (section-H-style single-source discipline). Stop is terminate-based with the
+               latest snapshot kept, exactly like the main solve; a Stop before the first 500k-node
+               snapshot injects an empty capped result, which completeOOP's existing no-result branch
+               turns into the instant greedy partial. The OOP brute-force permutation stage AFTER the
                in-position solve (permuteOOP(), scoring spare-card assignments into uncoverable slots)
-               is out of scope for this item: it is already its own nodeCap-bounded loop over a
-               typically small sparePool, cheap relative to the in-position DFS, so it was left
-               synchronous the same way item 6 left its own small fixed-cost pieces alone. NOT
-               IMPLEMENTED -- deferred pending confirmation this is worth the same worker-blob/
-               message-protocol/teardown machinery item 6 already paid for once; flagged here so a
-               future pass doesn't have to re-derive the diagnosis from scratch.
+               stayed synchronous per the original scoping: it is already its own nodeCap-bounded loop
+               over a typically small sparePool, cheap relative to the in-position DFS, same way item
+               6 left its own small fixed-cost pieces alone.
+
+            9. (added v17.8.65) CLOSING CATALOGUE: PARALLEL/DIVERSITY INTERACTION IDEAS CONSIDERED
+               AND REJECTED (OR CONSCIOUSLY DEFERRED). All four below came out of the same v17.8.65
+               review that implemented item 8. None are implemented; each entry records WHY, so a
+               future pass weighing "could this be an improvement?" starts from the failure analysis
+               instead of re-deriving it. Some genuinely could be improvements in narrow conditions --
+               the rejections are about risk/benefit against this file's correctness-first bar, not
+               claims of impossibility.
+                 a. DIVERSITY PLAN ON THE MULTI-WORKER PARALLEL PATH -- REJECTED. The "(does not work
+                    with parallel search)" label is a design decision, not an omission. Each
+                    partitioned worker running its own multi-phase plan breaks three invariants at
+                    once: (1) budget semantics -- perCap=ceil(cap/W) split AGAIN into phase fractions
+                    means the divstatic guarantee ("phase 1 establishes a strong incumbent") holds
+                    per-worker-per-slice, not for the search, and the measured sweet spots (50-75%,
+                    8-16 passes) were calibrated against a WHOLE budget, so the tuning advice becomes
+                    silently wrong; (2) the nodes>=cap completeness discriminator in _finishParallel
+                    assumes each worker ran ONE search against perCap -- phase-sliced workers cap in
+                    ways that make "aggregate reached global cap" no longer mean "budget exhausted";
+                    (3) the shuffle passes' whole value is exploring DIFFERENT tree regions, but the
+                    root partition already forces each worker into a disjoint region -- shuffling
+                    WITHIN a partition re-explores a slice that is already diversity by construction,
+                    so the expected gain is much smaller than the serial measurements suggest while
+                    the semantic damage is full-price. Also note each worker already runs plain
+                    divstatic (the strongest single ordering per the v12.x data), so the parallel
+                    path is not missing the proven-best default, only the optional alternates.
+                 b. DIVERSITY PLAN ON THE ONE-WORKER SERIAL PATH (forceW===1) -- FEASIBLE, DEFERRED.
+                    This is the one combination with no semantic conflict: forceW===1 runs the exact
+                    serial tree in a single worker purely so Stop + live progress work, and a
+                    diversity plan there would be the SAME solveWithDiversity call the true serial
+                    path makes today, just off the main thread. It is deferred, not rejected: doing
+                    it means either serializing solveWithDiversity into _buildSolverWorkerBlob (a
+                    second blob now carries phase-plan semantics -- and note the OOP blob added by
+                    item 8 ALREADY does exactly this, so the pattern is proven in-file and that blob
+                    is the template to copy) or routing diversity solves through the OOP-style blob.
+                    Benefit is real but narrow: today a diversity run (shuffle passes > 0, parallel
+                    off) is the LAST main-solve configuration that still blocks the main thread with
+                    no Stop -- the _oneWorker gate in runSolve excludes it explicitly. If a user
+                    reports a hung diversity run, this is the fix, and it is now cheap; until then it
+                    stays deferred to avoid carrying two copies of solveWithDiversity's serialization
+                    surface for a path with a visible UI warning already on it.
+                 c. TWO-SLOT CROSS-PRODUCT ROOT PARTITIONING (to reach the full 64 workers) --
+                    REJECTED. Single-slot partitioning can never split wider than the largest
+                    per-slot candidate pool, and a draft has ~23-30 cards total, so 64 real
+                    partitions are STRUCTURALLY unreachable today -- the 64 ceiling on the slider is
+                    aspirational headroom, not a promise. Partitioning on (slot A candidate x slot B
+                    candidate) pairs would multiply the split width and is sound in principle (every
+                    legal XI has exactly one such pair), BUT: many pairs are jointly infeasible (same
+                    card, same hold group), producing EMPTY partitions that consume perCap budget
+                    while searching nothing -- the exact phantom-worker budget-starvation bug class
+                    v17.8.63 just eliminated, reintroduced by design; the nodes>=cap discriminator
+                    breaks the same way it did in that bug; it needs a second rootAllow threading
+                    through solveBest's signature and the worker blob (solver-touching, full
+                    12-regime harness bar per F.2/Q.2); and the wall-clock benefit is ~zero, because
+                    splits beyond navigator.hardwareConcurrency only time-slice the same cores.
+                 d. DYNAMIC WORK-QUEUE SCHEDULING (spawn ~hardwareConcurrency workers, chunk root
+                    candidates finely, feed the next chunk as each worker finishes, redistribute
+                    unspent budget) -- DEFERRED, and this is the RIGHT future shape if worker load
+                    imbalance ever measurably hurts. It solves the actual problem the "more splits"
+                    instinct approximates (one worker owning a huge subtree while siblings sit idle
+                    with spent-nothing budgets) without any of item c's soundness traps. Rejected for
+                    now because it is structurally invasive to exactly the machinery items 2/3/6/7
+                    carefully stabilized: per-worker cap accounting (perCap stops being a constant),
+                    the capped/workerCapSoft discriminators, snapshot bookkeeping (a worker's snaps
+                    span multiple chunks), and the Stop merge. Note also that item 7b's shared atomic
+                    floor + 7c's bound-sorted round-robin already claw back most of the imbalance
+                    cost cheaply -- measure against those before paying for this.
 
           CURRENT STATUS / DEFERRAL (item 1, and item 4's aggregated clash-reason evidence): previous
           attempts at these ideas repeatedly achieved one part only by breaking something more
@@ -4937,12 +5059,6 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
        type-as-given), and dropped the long-dead pre-v16.0 "exact-duplicate skip" rule. (3) Repointed
        the index's "DB card entry" line at the FAST PATH. No card data, solver, bound, UI, or weight
        changed. -->
-  <!-- v17.8.29 -- UI LABELS ONLY, no logic/data changed. Removed the explanatory sub-clauses
-       from four labels in the add-card (db-*) and edit-card (dbe-*) DB forms, as they are
-       self-explanatory: "League" (dropped "heroes: their hero league; normals: the card's real
-       league (blank = Premier League)"), "Positions" (dropped "tap all it can play, PRIMARY
-       first"), "Primary position" (dropped "options limited to ticked positions above"), and
-       "Copies" (dropped "identical prints"). -->
   <!-- v17.8.28 -- FIX: three bugs where `copies` and `primary` were silently dropped on import or
        edit. (1) IMPORT copies: the #dbFile handler rebuilt each record field-by-field but never read
        p.copies, so round-tripping an exported DB reset every card to 1 copy. Now reads and clamps
@@ -4956,6 +5072,12 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
        number input (min 1, max 99, pre-filled from p.copies) in a flex row beside the Primary
        position dropdown, matching the add-card form layout. saveDBEdit() now reads #dbe-copies and
        writes it onto the updated entry the same way addToDB() already did. -->
+  <!-- v17.8.29 -- UI LABELS ONLY, no logic/data changed. Removed the explanatory sub-clauses
+       from four labels in the add-card (db-*) and edit-card (dbe-*) DB forms, as they are
+       self-explanatory: "League" (dropped "heroes: their hero league; normals: the card's real
+       league (blank = Premier League)"), "Positions" (dropped "tap all it can play, PRIMARY
+       first"), "Primary position" (dropped "options limited to ticked positions above"), and
+       "Copies" (dropped "identical prints"). -->
   <!-- v17.8.30 -- FIX: loadDefaultDB() (the function that seeds playerDB from DEFAULT_DB on every
        fresh load with no saved session, AND on every "Reset to default" click) never carried the
        `copies` field over -- only the isDefault-comparison mapping (defMapped) and the session-
@@ -4976,8 +5098,6 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
        top-rated cards. A possible fix would be adding an extra slot to the JSON, numbered 1/2/3,
        to separate them, but that would be difficult to add to the UI and is not considered worth
        the effort for now. May be revisited later. -->
-  <!-- v17.8.34 -- DB: added 15 normal Premier League cards: Sadiki, De Fougerolles, Doak, Diouf, Vuskovic, Riad, Cherki, Brobbey, Ayari, Van de Ven, Anderson, O'Reilly, Soucek, Tonali, and Woltemade. -->
-  <!-- v17.8.35 -- DB FIX: icon Jones (91 OVR, CB) had nation "England" but is the German Jones (matches the 89/85 OVR Jones CB icon cards) -- corrected to "Germany". Also fixed a canonical-naming bug: all 5 Park Ji Sung cards (hero 93/91/87/86, icon 72) were stored with nation "South Korea", which is not in the NATIONS list (canonical form is "Korea Republic") and isn't auto-canonicalized on DEFAULT_DB load -- corrected to "Korea Republic" so nation filters/dropdowns and any nation-keyed logic actually match these cards. -->
   <!-- v17.8.33 -- DB: reserved (but unused) `pidx` field on DEFAULT_DB entries and threaded it
        through loadDefaultDB(), the defMapped comparison, the import/merge path, and inline DB
        edits, so it survives every existing read/write path without being dropped. Wired it into
@@ -4987,6 +5107,8 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
        purely groundwork. A same-NATION check (same name + same primary + different nation = treat
        as different people) was discussed as a cheaper, if imperfect, alternative and left as a
        future consideration for a DB refresh (e.g. 2027) rather than implemented now. -->
+  <!-- v17.8.34 -- DB: added 15 normal Premier League cards: Sadiki, De Fougerolles, Doak, Diouf, Vuskovic, Riad, Cherki, Brobbey, Ayari, Van de Ven, Anderson, O'Reilly, Soucek, Tonali, and Woltemade. -->
+  <!-- v17.8.35 -- DB FIX: icon Jones (91 OVR, CB) had nation "England" but is the German Jones (matches the 89/85 OVR Jones CB icon cards) -- corrected to "Germany". Also fixed a canonical-naming bug: all 5 Park Ji Sung cards (hero 93/91/87/86, icon 72) were stored with nation "South Korea", which is not in the NATIONS list (canonical form is "Korea Republic") and isn't auto-canonicalized on DEFAULT_DB load -- corrected to "Korea Republic" so nation filters/dropdowns and any nation-keyed logic actually match these cards. -->
   <!-- v17.8.36 -- DOCUMENTATION/UI COPY ONLY, no solver-search behavior changed. Added Future
        Maintainers sections Y and Z: Y records the completed 23x5 / 115-player maximum-board full
        search (8.443B nodes in 5.992M ms, final best XI already found by 85M); Z records the deferred
@@ -5435,7 +5557,6 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
        This also makes every partition non-empty whenever W>1, which is the precondition the
        nodes>=cap completeness check at _finishParallel already relied on but hadn't been guaranteed
        until now (see comment there). -->
-  <h1 class="cap">&#11041; Draft Solver <span style="font-size:11px;opacity:.55;font-weight:400;letter-spacing:0">v17.8.64</span></h1>
   <!-- v17.8.64 -- DOCUMENTATION ONLY, no logic/UI change. Added item 8 to section Z of the FOR
        FUTURE MAINTAINERS block (backlog, DEFERRED): completeOOP's in-position sub-solve
        (solveWithDiversity, called synchronously from _renderEmergencyFillInner) has no Worker and
@@ -5444,6 +5565,172 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
        to stop it. Proposed approach sketched (mirror _analyzeTiesAsync/_benchRun's worker-blob +
        shared-Stop-button pattern), not yet implemented. Also updated section Z's own header
        summary and the top-of-file section INDEX one-liner to reference item 8. -->
+  <!-- v17.8.65 -- SECTION Z ITEM 8 IMPLEMENTED (emergency-fill Stop button) + UI copy + item 9.
+       (1) completeOOP's in-position sub-solve now runs in a dedicated Worker: _buildOopWorkerBlob
+       (serializes solveWithDiversity + its solveBest dependency chain; diversity plan and skip-ties
+       shipped as data, cross-phase node accumulation in the snapshot wrapper), _oopRun state,
+       _stopOopRun (terminate + latest snapshot kept, exactly the main solve's Stop semantics; a
+       stop before the first 500k-node snapshot injects an empty capped result, which completeOOP's
+       existing no-result branch renders as the instant greedy partial). The shared #solverStopBtn
+       routes to it via an _oopRun check in _stopParallelSolve next to the _benchRun one. The
+       sub-problem definition (coverable-slot sub-form / rating-desc order / probe seed) was
+       extracted to _oopSubTask, single-sourced between completeOOP's synchronous path and the
+       worker launcher; the worker's result (final or Stop-merged partial) is injected back through
+       completeOOP's new optional preSub parameter, so tie-break/spare-pool/permuteOOP/return-shape
+       are the same code on both paths. The pre-17.8.65 synchronous path is kept VERBATIM as the
+       no-Worker/blob-failure/worker-error fallback (also the iOS-safe path). The "cut short" box
+       now says "stopped early" (no misleading budget number) when the cut was a user Stop
+       (em.stoppedEarly). permuteOOP intentionally left synchronous per item 8's own scoping.
+       (2) Search-diversity UI copy: label now says shuffle passes must be > 0 (the %divstatic
+       slider alone has NEVER done anything -- _diversityPlan() is null at 0 passes -- this was
+       undocumented, not new), and the explainer paragraph was condensed with the same facts.
+       (3) Section Z item 9 added: closing catalogue of the parallel/diversity interaction ideas
+       reviewed this pass and REJECTED or consciously deferred (diversity on the multi-worker path,
+       diversity on the forceW===1 one-worker path, two-slot cross-product root partitioning to
+       reach 64 workers, dynamic work-queue scheduling), each with its concrete failure mode so
+       future passes don't re-derive them. No solver-core (solveBest/scoreXI/trueChem) logic was
+       touched; the worker blob serializes the page's live function sources, so section H's
+       copies-in-sync rule is not implicated. -->
+  <!-- v17.8.66 -- SOUNDNESS: section Z item 7 (b: shared atomic incumbent, c: bound-sorted root
+       partitioning) taken from "fuzz-verified off-tree but not yet the full 12-regime harness"
+       (v17.8.61 status) to component-isolated + full-pipeline TESTED. HARNESS-ONLY entry — no
+       solveBest/scoreXI/_runSolveParallel code touched by this patch.
+
+       WHY A NEW HARNESS INSTEAD OF REUSING solver_bound_tests_v2.js: that harness targets a
+       different bug family (dacVec's collision-fix branch, assignMaxSumNode, spMaxFreeBox) —
+       item 7 has no dacVec/h2NodeBound involvement at all. What's reused is its SHAPE, not its
+       content: check each new piece against an oracle built for THAT piece's own precondition,
+       instead of inferring soundness from one aggregate end-to-end pass rate the way v1's Test 2
+       did (0/144,366 "DAC violations" against a generator that, on inspection, never actually
+       forced the collision branch it claimed to test). A random floor value is exactly as likely
+       to never bind as that generator was to never collide, so five new files apply the same
+       "force the actual precondition" discipline to item 7's real surface: the CAS-max publish
+       loop, the root-candidate sort, and the rootAllow+sharedFloor plumbing together.
+
+       FILES: six new ones — test_A_sort_isolated.js, test_B_floor_forced.js,
+       test_C_cas_concurrency.js, test_D_multiworker_e2e.js, test_E_absent_regression.js,
+       run_all.js — appended to this file's own APPENDIX below, after fuzz_run_wide.js and before
+       the END APPENDIX marker. They require() indep_brute.js and fuzz_gen.js, ALREADY in the
+       appendix, UNCHANGED (fuzz_gen's realDB regime unused here — no playerDB.json dependency
+       needed for this suite). They also require() prod_solver.js — DELIBERATELY NOT re-pasted
+       into the appendix as a second permanent copy: that's the exact anti-pattern v16.20.0
+       already removed one of (a byte-for-byte duplicate of the live solver silently drifting out
+       of sync). Same discipline as the existing placeholder: at harness-run time, extract
+       scoreXI + solveBest verbatim from the live <script> above and append
+       `module.exports = { scoreXI, solveBest };`, THEN run these five tests against that fresh
+       copy — never against a paste left over from a previous version. The RESULTS below were
+       produced exactly that way, against the solveBest/scoreXI as they stand in this file at
+       v17.8.66.
+
+       METHODOLOGY PER TEST:
+         A) root-candidate sort (item 7c), ALONE: is it a lossless permutation (nothing dropped —
+            a lossy partition step could shrink the search space in a way an end-to-end score
+            comparison would never catch if the dropped card wasn't optimal anyway, the same
+            blind spot the v1 DAC generator had) and is it correctly descending-ordered.
+         B) sharedFloor forced to the three boundary values that actually exercise item 7b's
+            logic, not sampled randomly: floor == true optimum exactly (must NOT drop the tie);
+            floor == true optimum + 1 / unreachable (must never fabricate a completion above it);
+            floor seeded from a REAL sibling partition's true best while this worker's own
+            rootAllow is restricted to a provably worse slice (the actual multi-worker shape).
+         C) the exact CAS-max retry loop (dfs()'s Atomics.load/compareExchange block), hammered
+            by REAL OS threads via worker_threads racing on one SharedArrayBuffer — not a
+            single-threaded simulation, which could accidentally never exercise the real race
+            window. Checked for lost updates.
+         D) closest in-Node replica of the real browser path: real worker_threads each running
+            the actual extracted solveBest on a disjoint root partition, one real shared floor,
+            merged exactly like _mergeWorkerResults, checked against indep_brute.js. Half the
+            instances are rating-skewed on purpose so the floor is likely to actually bind rather
+            than sit at -1 for the whole run.
+         E) sharedFloor/rootSlotIdx OMITTED (the untouched default path every non-opted-in caller
+            still uses — serial solves, bench/manager, completeOOP sync fallback) vs indep_brute,
+            across all 11 synthetic regimes individually, not just in aggregate.
+
+       RESULTS (this session, seeds fixed, reproducible via `node run_all.js`):
+         A) 2,000 checked / 0 lossy-permutation / 0 ordering failures.                      PASS
+         B) 2,618 checked (of 4,000 drafts attempted; rest skipped as infeasible or over the
+            brute oracle's combos budget) / 0 dropped-tie / 0 overshoot / 0 fabrication / 0
+            split-worker-merge failures.                                                    PASS
+         C) 12 rounds, 2-7 real concurrent threads each, 4,000 attempts/thread / 0 lost updates.
+                                                                                              PASS
+         D) 54 genuine multi-thread runs (2-4 real worker_threads each, actual solveBest, one
+            real shared floor) / floor actually bound (ended >=0) in 51/54 / 0 merged-answer
+            mismatches / 0 illegal or misscored bestXIs.                                    PASS
+         E) 2,283 checked / 0 mismatches, clean in every one of the 11 regimes individually.
+                                                                                              PASS
+
+       ONE BUG FOUND AND FIXED — IN THE HARNESS, NOT THE SOLVER: test D's first run showed 8
+       "mismatches", all solver-scores-higher-than-oracle by a small, plausible-looking margin —
+       exactly the shape a real bound-tightness bug would have. Traced to the harness: the
+       deliberate rating-skew (added to make the floor likely to bind) was applied to a copy made
+       AFTER the brute-force oracle had already scored the unskewed original, so the two sides
+       were silently comparing different instances. Fixed by skewing before the oracle runs, on
+       the same object both sides then score; re-run came back clean (the D result above). Kept
+       in the record per this section's own discipline — a consistent one-directional gap is
+       worth writing down even when it turns out to be the harness, not the code under test.
+
+       WHAT THIS DOES AND DOES NOT ESTABLISH: A-E clear the specific pending-harness flag v17.8.61
+       left on item 7b/7c, adding over its "367 random small drafts + 734 two-worker runs" fuzz
+       claim: an isolated non-inferred check on the sort component (A); boundary values chosen to
+       force the precondition rather than sampled randomly (B); REAL OS-thread concurrency on the
+       actual CAS code rather than a simulated interleaving (C); a genuine multi-thread solveBest
+       pipeline rather than a single-thread stand-in (D); a full per-regime regression sweep on
+       the untouched default path (E). They do NOT replace section H's own full twelve-regime
+       harness + real fingerprint fixtures (browser-run, real playerDB, real formations, includes
+       the realDB regime) — that box is still open and should be checked off separately per
+       F.2/Q.2 discipline before item 7 is called fully release-final. -->
+  <!-- v17.8.67 -- DOCUMENTATION ONLY, no logic/UI/content changed, nothing wired in or called.
+       The v16.16.1 CHANGELOG entry (below, in the older section of this history) rejected two
+       candidate per-node bound tightenings on top of h2NodeBound: "H3" (a threshold-DP bound) and
+       combinedBound=min(h2NodeBound,H3). h2NodeBound itself was kept in the file, DEFINED but
+       UNCALLED, specifically so the exact-assignment machinery would be available as reference --
+       but H3 was only ever described in that entry's prose; the actual code never made it into the
+       file, not even in disabled form. Recreated it here as h3NodeBound(), placed directly after
+       h2NodeBound (same solveBest scope, same DEFINED-but-UNCALLED status, never called from dfs()
+       or anywhere else), matching the v16.16.1 description: A_low = (fixedSum + sum of each free
+       slot's own unconstrained per-slot minimum)/N as a sound lower bound on the true mean, then an
+       exact max-weight assignment DP (same bitmask-over-groups shape as assignMaxSumNode) maximizing
+       the separable term(v)=v+max(v-A_low,0) per remaining slot. This is a documentation/parity fix
+       only -- the v16.16.1 verdict (REJECTED: sound but not worth the cost) is unchanged and still
+       applies; do not call h3NodeBound without re-clearing that entry's bar. -->
+  <!-- v17.8.68 -- CHANGELOG REORDER (documentation only, no logic/UI/data/content changed, no
+       entry's text edited -- only position, same discipline as the v14.1.1 precedent for this
+       exact kind of drift). Fixed three separate ordering defects found by scanning every
+       "<!-- vX.Y.Z" changelog-entry line in the file and checking strict version-number order:
+       (1) v17.8.28 and v17.8.29 had been swapped (29 appeared before 28) -- restored to
+       28-then-29. (2) v17.8.33 had landed after v17.8.34/v17.8.35 instead of before them --
+       moved back to its correct position immediately after v17.8.32. (3) The biggest one: this
+       file's own stated convention (see the VERSION comment and FOR FUTURE MAINTAINERS section G)
+       is "add a one-line changelog entry above the <h1>" -- but v17.8.64/65/66/67 had each been
+       appended AFTER the <h1> instead (a drift that started with v17.8.65/66/67; v17.8.64 was
+       already misplaced when 65 landed after it), and out of order among themselves (67, 65, 64,
+       66). All four are moved back above the <h1>, in correct chronological order immediately
+       after v17.8.63, restoring "every changelog entry lives above the <h1>" as an exceptionless
+       rule again. NOT changed: the CHANGELOG's split around the "FOR FUTURE MAINTAINERS — KEY
+       REFERENCE MATERIAL" block (sections A-Z, v8.12-through-v17.8.0 changelog above it,
+       v17.8.1-onward changelog below it) -- that split is the file's own documented v15.1.8
+       READING ORDER design (skip straight to FOR FUTURE MAINTAINERS first; the changelog is an
+       archive to search, not a document to read start-to-finish), not a defect, so it was left
+       exactly as-is rather than collapsed into one contiguous run. -->
+  <!-- v17.8.69 -- DOCUMENTATION ONLY, no logic/UI/data/content changed. Follow-up to v17.8.68's
+       reorder: since the same drift (entries landing after the <h1>, or out of order) has now
+       happened more than once, tightened the placement rule instead of just fixing the symptom
+       again. (1) CHANGELOG CONVENTION (top of file) gained a PLACEMENT sub-note: a new entry is
+       always the LAST entry in the run directly above the <h1>, in strictly increasing version
+       order, inserted immediately above the tag -- never after it -- and to check the entry
+       immediately above the insertion point really is the current highest version before adding
+       one. (2) Also clarified there, separately, what turned out to be a related but different
+       point of confusion: three inline "<!-- vX.Y.Z — ..." comments living well after the <h1>,
+       inside the Advanced-settings UI markup (v16.13.4, v16.14.2, v16.15.0), document a specific
+       element IN PLACE and are not changelog entries at all, despite matching the same text
+       format -- they're deliberate local context, not drift, and should be left alone and
+       excluded from any changelog scan/reorder pass (the rule for telling them apart: real
+       entries live above the <h1>, or in the HISTORICAL CHANGELOG block for pre-v8.12 history;
+       a "vX.Y.Z" comment anywhere else in the file is inline context, not a changelog entry).
+       (3) The FAST PATH step 7 (top of file) and FOR FUTURE MAINTAINERS section I step (e), the
+       two places an editor doing a routine DB-card edit actually reads, were both reworded to
+       state the same placement rule directly, rather than relying on a cross-reference to the
+       fuller CHANGELOG CONVENTION note most routine edits never read. -->
+  <h1 class="cap">&#11041; Draft Solver <span style="font-size:11px;opacity:.55;font-weight:400;letter-spacing:0">v17.8.69</span></h1>
   <div class="cap sub">pacwyn draft optimiser</div>
   <div style="position:absolute;right:2px;top:40px;text-align:right;font-size:10px;line-height:1.5;color:var(--mut)">Created by <b style="color:var(--ink)">Chenzo</b><br><span style="opacity:.8">Special thanks to BWFCPackfan</span></div>
 </header>
@@ -5646,12 +5933,12 @@ details.hlp p{font-size:12px;color:var(--mut);margin:8px 0 0;line-height:1.55}
         <p class="tiny" style="margin:4px 0 0">Only search for squads reaching this final score (incl. manager +2). 0 = off.</p>
       </div>
       <div style="margin-top:14px">
-        <label style="font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;display:block">Search diversity &mdash; <span id="divPctLabel" style="color:var(--ink);font-weight:800">100%</span> divstatic <span style="text-transform:none;letter-spacing:0;color:var(--warn);font-weight:600">(does not work with parallel search)</span></label>
+        <label style="font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;display:block">Search diversity &mdash; <span id="divPctLabel" style="color:var(--ink);font-weight:800">100%</span> divstatic <span style="text-transform:none;letter-spacing:0;color:var(--warn);font-weight:600">(needs shuffle passes &gt; 0 &mdash; does not work with parallel search)</span></label>
         <input type="range" id="divPctSlider" min="0" max="100" step="5" value="100" style="width:100%;margin:0 0 2px;accent-color:var(--cyan)" oninput="_updDivPctLbl()" onchange="saveAdvSettings();_solveCache=null;">
         <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--mut);margin-bottom:10px"><span>0% (all shuffle)</span><span>50 / 50</span><span>100% (all divstatic)</span></div>
         <label style="font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;display:block">Shuffle passes (0&ndash;256)</label>
         <input type="number" id="shuffleCount" min="0" max="256" value="0" inputmode="numeric" style="width:100%" onblur="_clampShuffleCount(this);saveAdvSettings();_solveCache=null;">
-        <p class="tiny" style="margin:4px 0 0">Splits the <b>same</b> node cap into phases: a <b>%divstatic</b> share first (best-first, establishes a strong incumbent), then that many even, independently-seeded <b>shuffle</b> passes exploring different regions of the tree &mdash; keeping whichever phase scored highest. Any phase that finishes its whole tree still returns the proven optimum. Note: this can occasionally score <i>below</i> 0 shuffle passes at the same budget &mdash; shrinking %divstatic isn't free, since divstatic itself sometimes still needs its later budget to improve, not just to prove it's already optimal. Tested sweet spot: <b>50&ndash;75% divstatic with 8&ndash;16 shuffle passes</b>; low %divstatic (&le;25%) tested as a net loss regardless of pass count, and gains from more passes taper off past ~16&ndash;24.</p>
+        <p class="tiny" style="margin:4px 0 0">Splits the <b>same</b> node cap into a <b>%divstatic</b> phase (best-first) followed by that many independently-seeded <b>shuffle</b> passes, keeping the best result found. A phase that finishes its whole tree still returns the proven optimum. Can occasionally score <i>below</i> 0 passes at the same budget. Tested sweet spot: <b>50&ndash;75% divstatic with 8&ndash;16 passes</b>; &le;25% divstatic tested as a net loss, and gains taper off past ~16&ndash;24 passes. With <b>0 shuffle passes both controls do nothing</b> (plain divstatic solve).</p>
       </div>
       <div style="margin-top:14px">
         <label style="font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;display:block">Bench analysis depth</label>
@@ -8005,6 +8292,75 @@ function solveBest(form,cards,nodeCap,ratingCeil,seedBest,seedXIs,skipTies,diver
     const spMax=spMaxFreeBox(committed,asn.L,asn.U,SmaxTotal);
     return Math.floor((SmaxTotal+spMax)/N);
   }
+  // v17.8.67 -- RECREATED, NOT LIVE: "H3", the threshold-DP bound rejected (sound, but not worth
+  // the cost) in the v16.16.1 CHANGELOG entry above the <h1>. That entry described H3 in prose only
+  // -- it never actually made it into the file, not even DISABLED like h2NodeBound was. Added here
+  // now purely as documentation/reference for future maintainers (per that entry's own "so nobody
+  // re-derives and re-tries the same two rejected ideas from scratch later" goal) -- DEFINED,
+  // UNCALLED, exactly like h2NodeBound/assignMaxSumNode/spMaxFreeBox above it. Do not wire this in
+  // without re-clearing the v16.16.1 bar (beat __d on BOTH node count AND wall-clock time in a real
+  // DFS simulator -- the v16.16.1 numbers show it does not: combined(h2,H3) ran ~1.5x SLOWER than
+  // h2NodeBound alone despite fewer nodes, and h2NodeBound alone already lost to plain __d).
+  //
+  // A_low = (fixedSum + sum of each free slot's own unconstrained per-slot minimum)/N is a proven
+  // LOWER bound on the true mean of any feasible completion (each free slot's real assigned value
+  // can only be >= its own worst case, so the true mean can only be >= this floor). With A_low held
+  // fixed (not the true mean, which depends on the full completion), term(v)=v+max(v-A_low,0) is
+  // separable per remaining slot, so an exact max-weight assignment DP -- same bitmask-over-groups
+  // shape as assignMaxSumNode above, just weighted by term(v) instead of raw rating -- gives an
+  // exact max of sum(term(v)) over the free slots. Soundness: since A_low<=true mean, term(v)>=
+  // v+max(v-mean,0) for every v, so summing term(v) over ALL N slots (committed + free) and dividing
+  // by N can only be >= the true (sum+spread-above-mean)/N -- a valid, if looser, upper bound.
+  function h3NodeBound(k,order,cand,usedGroups,pick){
+    const N=order.length,R=N-k;
+    if(R<=1||R>8)return null; // same guard as h2NodeBound -- trivial, or too large to be cheap
+    const remSlots=new Array(R);for(let i=0;i<R;i++)remSlots[i]=order[k+i];
+    const L=new Array(R);
+    const groupBest=new Map(); // group -> Array(R) of its best RAW rating for that slot, or -Infinity
+    for(let i=0;i<R;i++){
+      const list=cand[remSlots[i]];let lo=Infinity;
+      for(const c of list){
+        if(usedGroups.has(c._group))continue;
+        if(c.rating<lo)lo=c.rating;
+        let arr=groupBest.get(c._group);
+        if(!arr){arr=new Array(R).fill(-Infinity);groupBest.set(c._group,arr);}
+        if(c.rating>arr[i])arr[i]=c.rating;
+      }
+      if(lo===Infinity)return null; // this slot has zero legal candidates -- no legal completion here
+      L[i]=lo;
+    }
+    const committed=new Array(k);for(let j=0;j<k;j++)committed[j]=pick[order[j]].rating;
+    const fixedSum=committed.reduce((a,b)=>a+b,0);
+    let Lsum=0;for(let i=0;i<R;i++)Lsum+=L[i];
+    const A_low=(fixedSum+Lsum)/N;
+    let fixedTerm=0;for(const v of committed)fixedTerm+=v+Math.max(0,v-A_low);
+    // Max-weight assignment of distinct groups to the R remaining slots, weight = term(rating) --
+    // identical bitmask DP shape to assignMaxSumNode above, just weighted by term() instead of the
+    // raw rating (a raw sum has no domination trap, and neither does a per-slot-separable term()).
+    const full=(1<<R)-1;
+    let dp=new Array(1<<R).fill(-Infinity);dp[0]=0;
+    for(const arr of groupBest.values()){
+      const next=dp.slice(); // read from the pre-this-group snapshot so each group is used at most once
+      for(let mask=0;mask<=full;mask++){
+        if(dp[mask]===-Infinity)continue;
+        for(let i=0;i<R;i++){
+          if(mask&(1<<i))continue;
+          if(arr[i]===-Infinity)continue;
+          const w=arr[i]+Math.max(0,arr[i]-A_low);
+          const nm=mask|(1<<i),val=dp[mask]+w;
+          if(val>next[nm])next[nm]=val;
+        }
+      }
+      dp=next;
+    }
+    const Tmax=dp[full];
+    if(Tmax===-Infinity)return null; // no way to give every remaining slot a distinct group
+    return Math.floor((fixedTerm+Tmax)/N);
+  }
+  // combinedBound = min(h2NodeBound(...), h3NodeBound(...)) is what v16.16.1 actually measured as
+  // "combined(h2,H3)" -- safe by construction (the min of two independently-valid upper bounds is
+  // itself valid), but not reified as its own named function here since it's a one-line min() of the
+  // two above, and the original rejected attempt never made it a standalone function either.
   function dfs(k){
     let __rStar=-Infinity; // v16.14.0 UB-A: per-node minimal surviving candidate rating (set below)
     if(nodes++>CAP){capped=true;return;}
@@ -8459,6 +8815,7 @@ function _mergeWorkerResults(list){
 }
 function _stopParallelSolve(){
   if(_benchRun){_stopBenchRun();return;} // v17.8.51: the one Stop button is shared — during the worker-backed bench/manager pass it stops THAT (never live at the same time as a main-solve run)
+  if(_oopRun){_stopOopRun();return;} // v17.8.65 (section Z item 8): same sharing rule for the worker-backed emergency-fill sub-solve (never live at the same time as either of the above)
   const run=_parRun; if(!run||run.stopped)return;
   run.stopped=true;
   // v17.8.41 (section Z item 3): merge finished worker results WITH the latest periodic snapshot
@@ -8676,20 +9033,41 @@ function greedyPartial(form){
 // DO have eligible cards (using the real DFS solver), then drop the best remaining cards
 // OUT OF POSITION into any slots still empty. This means a single bust = a free slot and the
 // solver still finds the best legal arrangement before falling back.
-function completeOOP(form,nodeCap,ratingCeil){
+// v17.8.65 (section Z item 8): the in-position sub-solve's inputs (sub-form of coverable slots,
+// rating-desc card order, probe seed) extracted into ONE builder used by BOTH completeOOP's
+// synchronous path and _renderEmergencyFill's worker launcher — a single source so the worker can
+// never solve a different sub-problem than the sync path would have (same drift discipline as
+// section H's solver-copy rule). noProbe skips the probe-floor pre-solve when the caller already
+// has a finished sub-result to inject (the probe only exists to seed a solve that isn't happening).
+function _oopSubTask(form,cap,RC,noProbe){
+  const slots=form.slots;
+  const cand=slots.map(s=>cards.filter(c=>c.pos.includes(s)));
+  const coverableIdx=slots.map((_,i)=>cand[i].length>0?i:-1).filter(i=>i>=0);
+  if(!coverableIdx.length)return null; // every slot uncoverable — nothing for the real solver to scope to
+  const subForm={name:form.name,slots:coverableIdx.map(i=>slots[i])};
+  const sortedCards=cards.slice().sort((a,b)=>helpValue(b)-helpValue(a));
+  const seed=(!noProbe&&cap>2000000)?_probeFloor(subForm,sortedCards,RC):null;
+  return {subForm,sortedCards,seed,coverableIdx};
+}
+function completeOOP(form,nodeCap,ratingCeil,preSub){
   const cap=nodeCap||getNodeCap(); // same 5M-default / x3-escalation budget as the main solver
   const RC=ratingCeil!==undefined?ratingCeil:getRatingCeil(); // same Rating Ceiling as the main solver
   const slots=form.slots;
   const groupOf=c=>c.hold||('C'+c.id);
-  const cand=slots.map(s=>cards.filter(c=>c.pos.includes(s)));
-
-  const coverableIdx=slots.map((_,i)=>cand[i].length>0?i:-1).filter(i=>i>=0);
 
   const pick=new Array(slots.length).fill(null);
   const oop=new Array(slots.length).fill(false);
-  let subCapped=false,subForm=null;
+  let subCapped=false,subStopped=false,subForm=null;
 
-  if(coverableIdx.length>0){
+  // v17.8.65 (section Z item 8): preSub, when present, is {r} — a FINISHED solveWithDiversity-shaped
+  // result for the exact sub-problem _oopSubTask defines, computed in _renderEmergencyFill's
+  // dedicated Worker (or a Stop-merged partial snapshot from it, marked capped+stoppedEarly).
+  // Injecting it here means the whole rest of this function — tie-break, spare pool, permuteOOP,
+  // return shape — runs IDENTICALLY for the worker path and the synchronous path; only WHERE the
+  // in-position DFS ran differs. No preSub (worker unavailable/failed, or any legacy caller) is
+  // byte-identical to the pre-17.8.65 synchronous behavior.
+  const task=_oopSubTask(form,cap,RC,!!(preSub&&preSub.r));
+  if(task){
     // Build a sub-form with only the coverable slots and run the real solver on it.
     // v13.3: this now goes through the SAME machinery a clean main solve gets -- rating-desc card
     // order, an admissible probe-floor seed, the Search-diversity plan, and Skip ties -- via
@@ -8698,11 +9076,10 @@ function completeOOP(form,nodeCap,ratingCeil){
     // the in-position portion gets the same speed/quality within the same node cap that a clean
     // draft's solve would. Target score is intentionally NOT threaded through here -- it's defined
     // against a full 11-man final score and has no coherent meaning against a sub-form missing slots.
-    subForm={name:form.name,slots:coverableIdx.map(i=>slots[i])};
-    const sortedCards=cards.slice().sort((a,b)=>helpValue(b)-helpValue(a));
-    const seed=(cap>2000000)?_probeFloor(subForm,sortedCards,RC):null;
-    const r=solveWithDiversity(subForm,sortedCards,cap,RC,seed?seed.seedBest:undefined,seed?seed.seedXIs:undefined,_skipTies(),_diversityPlan());
-    subCapped=!!r.capped;
+    subForm=task.subForm;
+    const r=(preSub&&preSub.r)?preSub.r
+      :solveWithDiversity(subForm,task.sortedCards,cap,RC,task.seed?task.seed.seedBest:undefined,task.seed?task.seed.seedXIs:undefined,_skipTies(),_diversityPlan());
+    subCapped=!!r.capped;subStopped=!!r.stoppedEarly;
     if(r.bestXIs&&r.bestXIs.length){
       // v13.3: if the sub-solve found several tied-optimal in-position arrangements, break the tie
       // the SAME way a clean solve does -- Bench mode feeding true +2/+1 Manager depth analysis
@@ -8710,11 +9087,11 @@ function completeOOP(form,nodeCap,ratingCeil){
       // depth is off -- instead of always taking bestXIs[0], which was an arbitrary pick among
       // position-equivalent ties.
       const bestXI=_pickTieWinner(r.bestXIs,subForm).xi;
-      coverableIdx.forEach((slotI,k)=>{pick[slotI]=bestXI[k];});
+      task.coverableIdx.forEach((slotI,k)=>{pick[slotI]=bestXI[k];});
     } else {
       // Fallback: greedy partial for the coverable slots
       const part=greedyPartial(form);
-      coverableIdx.forEach(i=>{if(part.pick[i])pick[i]=part.pick[i];});
+      task.coverableIdx.forEach(i=>{if(part.pick[i])pick[i]=part.pick[i];});
     }
   }
 
@@ -8767,7 +9144,7 @@ function completeOOP(form,nodeCap,ratingCeil){
     finalSc=scoreXI(pick); finalChem=trueChem(pick);
   }
   const full11=finalPick.every(Boolean);
-  return {slots,pick:finalPick,oop:finalOop,full11,sc:finalSc,chem:finalChem,oopCount:oopSlotIdx.length,capped:subCapped||permCapped,cap,subForm};
+  return {slots,pick:finalPick,oop:finalOop,full11,sc:finalSc,chem:finalChem,oopCount:oopSlotIdx.length,capped:subCapped||permCapped,stoppedEarly:subStopped,cap,subForm};
 }
 // v13.3: winner-selection slice of _analyzeTies (see main solve, further down), factored out so
 // completeOOP's sub-solve can break ties among optimal in-position XIs the same way a clean solve
@@ -8809,8 +9186,46 @@ function _pickTieWinner(bestXIs,form){
 }
 // Renders the emergency-fill (OOP) result for a given node cap. Pulled out of _handleSolveResult so
 // the "Keep searching" button can re-run completeOOP at 3x the cap without duplicating the markup.
-// Public entry point: shows the "searching, don't touch anything" overlay and lets it paint before
-// the synchronous completeOOP work runs, same as runSolve/_begin does for the main solver.
+// v17.8.65 (section Z item 8, IMPLEMENTED): the expensive in-position sub-solve now runs in its own
+// dedicated Worker (mirroring _analyzeTiesAsync/_buildBenchWorkerBlob's shape) so the shared
+// #solverStopBtn works here too — previously a long emergency-fill search (especially "Search to
+// the end", cap=1e12) was a synchronous main-thread solveWithDiversity() with literally no way to
+// stop it, the exact class of problem items 2/3/6 already fixed for the main solve and the
+// bench/manager pass. The worker computes ONLY the in-position sub-solve (the expensive DFS);
+// everything after — _pickTieWinner tie-break, spare pool, permuteOOP, rendering — stays on the
+// main thread inside completeOOP exactly as before, fed via completeOOP's preSub injection point,
+// so the worker path and the sync path share every line of post-solve logic (no second assembler
+// to drift). permuteOOP stays synchronous per item 8's own scoping: it's a nodeCap-bounded loop
+// over a typically small sparePool, cheap relative to the in-position DFS. The synchronous path is
+// kept verbatim as the no-Worker-support / blob-failure / worker-error fallback — same pattern as
+// every other worker-backed pass in this file (and the iOS-safe path).
+function _buildOopWorkerBlob(){
+  // Same serialize-by-toString discipline as _buildSolverWorkerBlob/_buildBenchWorkerBlob: every
+  // function solveWithDiversity reaches must be in this array or it won't exist in the worker's
+  // scope (solveWithDiversity itself only calls solveBest; the diversity plan arrives as DATA in
+  // d.plan, so mkPlan is NOT needed here — do not "helpfully" add main-thread UI readers like
+  // _diversityPlan/_skipTies, they're read once on the main thread and shipped in the payload).
+  // solveBest is wrapped to inject the existing onSnapshot param (same shape the bench blob uses):
+  // every 500k nodes the current phase's monotonic incumbent snapshot is forwarded as a progress
+  // message, with __acc adding the nodes of already-FINISHED phases so the count shown (and any
+  // Stop-merged partial) is the cross-phase total, not just the current phase's. Each snapshot is
+  // marked capped:true because a snapshot is by definition an unfinished search — _stopOopRun feeds
+  // the latest one straight into completeOOP's preSub as a capped partial, exactly like the main
+  // solve's terminate-with-snapshots Stop. Snapshots are monotonic ACROSS phases too: each phase's
+  // solveBest is seeded with the best-so-far from the phases before it (see solveWithDiversity's
+  // loop), so a later phase's snapshot can never report a worse incumbent than an earlier one.
+  const src=[futRatingRaw,leagueOf,trueChemPerCard,trueChem,scoreXI,solveBest,solveWithDiversity].map(f=>f.toString()).join('\n')
+    +'\nvar __acc=0;'
+    +'var __sbRaw=solveBest;solveBest=function(f,c,n,rc,sb,sx,st,ds,ra,os){'
+    +'var r=__sbRaw(f,c,n,rc,sb,sx,st,ds,ra,os||function(s){s.progress=true;s.capped=true;s.nodes=__acc+(s.nodes||0);postMessage(s);});'
+    +'__acc+=r.nodes||0;return r;};'
+    +'onmessage=function(e){var d=e.data;var r;'
+    +'try{r=solveWithDiversity(d.form,d.cards,d.nodeCap,d.ratingCeil,d.seedBest,d.seedXIs,d.skipTies,d.plan);}'
+    +'catch(err){postMessage({fatal:String(err&&err.message||err)});return;}'
+    +'postMessage({final:true,best:r.best,bestXIs:(r.bestXIs||[]).map(function(x){return {xi:x.xi,sc:x.sc};}),nodes:r.nodes,capped:!!r.capped,maxRating:r.maxRating,error:r.error||null});};';
+  return URL.createObjectURL(new Blob([src],{type:'application/javascript'}));
+}
+let _oopRun=null; // active worker-backed emergency-fill sub-solve, or null. Mutually exclusive with _parRun AND _benchRun for the same lifecycle reason item 6's pass is: the emergency path only ever starts after the main solve has already finished or been stopped, and the bench/manager pass only runs on a solve that produced ties (which an emergency fill by definition did not).
 function _renderEmergencyFill(form,cap,fromEsc){
   const out=$('#solveOut');
   // fromEsc is only ever passed (as 1) by this screen's own "keep searching"/"search to the end"
@@ -8819,11 +9234,71 @@ function _renderEmergencyFill(form,cap,fromEsc){
   if(fromEsc)_recLog('emergency fill: '+_recCapTxt(cap));
   _showSolverOverlay();
   out.innerHTML='<div class="note" style="color:var(--mut)">\u23f3 Solving\u2026'+(cap>10000000?' (extended search \u2014 '+Math.round(cap/1000000)+'M node cap)':'')+'</div>';
-  setTimeout(()=>{_renderEmergencyFillInner(form,cap);_hideSolverOverlay();},30);
+  const syncFallback=()=>{setTimeout(()=>{_renderEmergencyFillInner(form,cap);_hideSolverOverlay();},30);}; // the pre-17.8.65 path, verbatim
+  // Worker path. noProbe=false: the probe seed is still wanted here — it seeds the WORKER's phase 1
+  // exactly like it seeds the sync solve, and it's the same bounded, quick main-thread pre-solve the
+  // sync path always ran at this exact point anyway (noProbe=true is only for completeOOP itself
+  // when a finished preSub means no solve — and therefore no seed — is needed).
+  let task=null;
+  try{task=_oopSubTask(form,cap,getRatingCeil(),false);}catch(e){task=null;}
+  if(!task||typeof Worker==='undefined'){syncFallback();return;} // no coverable slots (sync path renders that case) or no Worker support
+  let url=null;
+  try{url=_buildOopWorkerBlob();}catch(e){url=null;}
+  if(!url){syncFallback();return;}
+  let w=null;
+  try{w=new Worker(url);}catch(e){w=null;}
+  if(!w){try{URL.revokeObjectURL(url);}catch(e){}syncFallback();return;}
+  const run={url,worker:w,snap:null,stopped:false,form,cap};
+  _oopRun=run;
+  const sb=$('#solverStopBtn');if(sb)sb.style.display='block';
+  const hint=$('#solverBadgeHint');if(hint)hint.textContent='Emergency fill\u2026 Stop keeps the best found.';
+  const teardown=()=>{try{w.terminate();}catch(e){}try{URL.revokeObjectURL(url);}catch(e){}
+    if(sb)sb.style.display='none';if(_oopRun===run)_oopRun=null;};
+  const failToSync=()=>{if(run.stopped)return;run.stopped=true;teardown();syncFallback();}; // worker failure -> clean synchronous rerun, identical result (mirrors the bench pass's fallback)
+  w.onerror=failToSync;
+  w.onmessage=function(e){
+    if(run.stopped)return;const d=e.data;
+    if(d&&d.progress){run.snap=d; // latest cross-phase monotonic snapshot — everything Stop needs
+      if(hint)hint.textContent='Emergency fill: '+(d.best>=0?('best so far '+d.best+' \u00b7 '):'')+Math.round((d.nodes||0)/1000000)+'M nodes \u2014 Stop keeps the best found.';
+      return;}
+    if(d&&d.fatal){failToSync();return;}
+    if(d&&d.final){
+      run.stopped=true;teardown();
+      if(d.error){syncFallback();return;} // e.g. no-eligible-card edge — let the sync path produce the canonical error/greedy UI (same rule _finishParallel uses)
+      _renderEmergencyFillInner(form,cap,{r:d});_hideSolverOverlay();
+    }
+  };
+  // Worker bestXIs come back as structured-clone COPIES of the card objects, same as the main
+  // parallel path's — downstream only reads plain props (id/label/rating/pos/hold/nation/club/
+  // type), never object identity, which is why _finishParallel never rehydrated either.
+  w.postMessage({form:{name:task.subForm.name,slots:task.subForm.slots.slice()},cards:task.sortedCards,nodeCap:cap,ratingCeil:getRatingCeil(),
+    seedBest:task.seed?task.seed.seedBest:undefined,seedXIs:task.seed&&task.seed.seedXIs?task.seed.seedXIs:undefined,
+    skipTies:_skipTies(),plan:_diversityPlan()});
 }
-function _renderEmergencyFillInner(form,cap){
+// v17.8.65 (section Z item 8): Stop for the worker-backed emergency-fill sub-solve. Terminate-based
+// with the latest published snapshot kept, exactly like the main solve's Stop — the snapshot IS a
+// valid (capped, stoppedEarly) sub-result, so it feeds completeOOP's preSub and the normal render
+// runs on the best-so-far in-position arrangement. Stopped before the first snapshot (<500k nodes):
+// an empty capped result is injected instead, which completeOOP's own existing no-result branch
+// turns into the greedy partial fill — still instant, still the canonical renderer.
+function _stopOopRun(){
+  const run=_oopRun;if(!run||run.stopped)return;
+  run.stopped=true;
+  try{run.worker&&run.worker.terminate();}catch(e){}
+  try{URL.revokeObjectURL(run.url);}catch(e){}
+  const sb=$('#solverStopBtn');if(sb)sb.style.display='none';
+  _oopRun=null;
+  const s=run.snap;
+  _recLog&&_recLog('emergency fill stopped by user \u2014 '+(s?Math.round((s.nodes||0)/1000000)+'M nodes explored, best in-position arrangement so far kept':'stopped before the first progress snapshot, greedy arrangement shown'));
+  const r=s&&s.best>=0&&s.bestXIs&&s.bestXIs.length
+    ?{best:s.best,bestXIs:s.bestXIs,nodes:s.nodes||0,capped:true,stoppedEarly:true}
+    :{best:-1,bestXIs:[],nodes:s?(s.nodes||0):0,capped:true,stoppedEarly:true};
+  _renderEmergencyFillInner(run.form,run.cap,{r});
+  _hideSolverOverlay();
+}
+function _renderEmergencyFillInner(form,cap,preSub){
   const out=$('#solveOut');
-  const em=completeOOP(form,cap);
+  const em=completeOOP(form,cap,undefined,preSub);
   // completeOOP hands back pick[]/oop[] in whatever order its two-stage solve happened to land them
   // in -- same "arbitrary permutation among position-equivalent cards" issue _minSwapLayout exists to
   // fix for clean solves, except previously this screen never ran that pass at all, so an emergency
@@ -8846,7 +9321,7 @@ function _renderEmergencyFillInner(form,cap){
   const head='<div class="note" style="border-color:var(--bad)"><b>No legal full XI</b> \u2014 some positions have no eligible card, so they\u2019re filled <b>out of position at 0 chem</b> as emergency placeholders. '+
     (em.full11?'All 11 slots are covered, but ':'Only '+em.pick.filter(Boolean).length+'/11 could be filled even out of position \u2014 ')+
     'check your busts: a card you binned may legally cover an unfilled slot for far more chem.</div>'+
-    (em.capped?'<div class="note" style="border-color:var(--warn)">\u26a0 This emergency fill was cut short at the '+(em.cap/1000000)+'M search budget \u2014 a better arrangement may exist deeper.'
+    (em.capped?'<div class="note" style="border-color:var(--warn)">\u26a0 '+(em.stoppedEarly?'This emergency fill was stopped early \u2014 it shows the best arrangement found so far; a better one may exist deeper.':'This emergency fill was cut short at the '+(em.cap/1000000)+'M search budget \u2014 a better arrangement may exist deeper.')
       +'<div class="row" style="gap:6px;margin-top:8px;flex-wrap:wrap">'
       +'<button class="btn sm" onclick="_renderEmergencyFill(FORMS.find(f=>f.name===chosenForm),'+(em.cap*3)+',1)">Keep searching ('+(em.cap*3/1000000)+'M)</button>'
       +'<button class="btn sec sm" onclick="_renderEmergencyFill(FORMS.find(f=>f.name===chosenForm),1e12,1)">Search to the end</button></div></div>':'');
@@ -15581,6 +16056,567 @@ log(`DONE. tested=${state.tested} findings=${state.findings} completeBrute=${sta
 log(`byTier: ${JSON.stringify(state.byTier)}`);
 log(`byRegime: ${JSON.stringify(state.byRegime)}`);
 
+-->
+
+<!-- ===== FILE: test_A_sort_isolated.js ===== -->
+<!--
+'use strict';
+// ==========================================================================================
+// TEST A) Root-candidate sort (item 7c), in isolation.
+// Verbatim copy of the sort block from _runSolveParallel (index.html lines ~8466-8472), lifted
+// out so it can be checked against its own precondition directly, the same "don't infer
+// soundness of a component from an aggregate end-to-end pass rate" discipline solver_bound_
+// tests_v2.js used for the DAC branch.
+// ==========================================================================================
+const { generate } = require('./fuzz_gen.js');
+
+function sortRootCands(rootCandsIn){
+  const rootCands = rootCandsIn.slice(); // don't mutate caller's array for this isolated test
+  const __rn={},__rc={};
+  for(const c of rootCands){__rn[c.nation]=(__rn[c.nation]||0)+1;if(c.type==='normal')__rc[c.club]=(__rc[c.club]||0)+1;}
+  rootCands.sort((a,b)=>{
+    const ka=a.rating+0.4/(__rn[a.nation]||1)+(a.type==='normal'?0.4/(__rc[a.club]||1):0);
+    const kb=b.rating+0.4/(__rn[b.nation]||1)+(b.type==='normal'?0.4/(__rc[b.club]||1):0);
+    return kb-ka;
+  });
+  return rootCands;
+}
+
+function keyOf(c, rn, rc){
+  return c.rating+0.4/(rn[c.nation]||1)+(c.type==='normal'?0.4/(rc[c.club]||1):0);
+}
+
+function runTest(trials){
+  let checked=0, notPermutation=0, notDescending=0;
+  for(let t=0;t<trials;t++){
+    const draft = generate(t*7+1);
+    if(draft.cards.length < 2) continue;
+    const before = draft.cards.slice();
+    const after = sortRootCands(before);
+    checked++;
+
+    // (1) LOSSLESSNESS: sort must be a pure permutation -- same multiset of ids, nothing
+    // dropped, nothing duplicated. A partitioning scheme built on a lossy sort would silently
+    // shrink the search space and could never be caught by an end-to-end score comparison if
+    // the dropped card was never going to be optimal anyway -- exactly the "generator never
+    // exercises the actual precondition" trap the DAC lesson describes, so this is checked
+    // directly rather than inferred.
+    const beforeIds = before.map(c=>c.id).sort((x,y)=>x-y);
+    const afterIds = after.map(c=>c.id).sort((x,y)=>x-y);
+    const sameSet = beforeIds.length===afterIds.length && beforeIds.every((v,i)=>v===afterIds[i]);
+    if(!sameSet) notPermutation++;
+
+    // (2) ORDERING: recompute the key independently (not by re-running the function under
+    // test) and confirm strictly-non-increasing order.
+    const __rn={},__rc={};
+    for(const c of before){__rn[c.nation]=(__rn[c.nation]||0)+1;if(c.type==='normal')__rc[c.club]=(__rc[c.club]||0)+1;}
+    let ok=true;
+    for(let i=1;i<after.length;i++){
+      if(keyOf(after[i],__rn,__rc) > keyOf(after[i-1],__rn,__rc) + 1e-9){ ok=false; break; }
+    }
+    if(!ok) notDescending++;
+  }
+  return {checked, notPermutation, notDescending};
+}
+
+if(require.main===module){
+  const r = runTest(2000);
+  console.log('=== A) root-candidate sort, isolated ===');
+  console.log(`checked: ${r.checked}  lossy-permutation failures: ${r.notPermutation} (expect 0)  ordering failures: ${r.notDescending} (expect 0)`);
+  if(r.notPermutation>0 || r.notDescending>0){ console.log('FAIL'); process.exitCode=1; }
+  else console.log('PASS');
+}
+module.exports = { sortRootCands };
+-->
+
+
+<!-- ===== FILE: test_B_floor_forced.js ===== -->
+<!--
+'use strict';
+// ==========================================================================================
+// TEST B) sharedFloor forced to the exact boundary values that matter, per draft.
+// ==========================================================================================
+// solver_bound_tests_v2.js's lesson: a generic/aggregate fuzz pass rate proves nothing about a
+// branch unless the generator is shown to actually FORCE that branch's precondition. Applied to
+// item 7b, the interesting preconditions for sharedFloor are:
+//   (1) floor === true global optimum exactly (non-strict boundary: must NOT prune away the
+//       only path to the optimum, and the tie must still be recorded, per the comment at
+//       index.html:8474 "a branch whose bound EQUALS the floor is NOT pruned").
+//   (2) floor === true optimum + 1 (one point ABOVE anything achievable): must return a result
+//       that never exceeds -- let alone fabricates -- a score above what's truly achievable, and
+//       per the changelog claim must safely fall back to best:-1 when the worker's own
+//       root-restricted partition can't reach the floor at all.
+//   (3) floor set from a SIBLING partition's real max, while THIS worker's own partition is
+//       restricted (via rootAllow) to a strictly worse subset -- the actual multi-worker shape,
+//       not just an arbitrary number.
+// Every instance below is constructed so the floor is GUARANTEED to bind (sit at or above the
+// partition's own true best), not left to chance.
+// ==========================================================================================
+const { generate } = require('./fuzz_gen.js');
+const { bruteForce } = require('./indep_brute.js');
+const { scoreXI, solveBest } = require('./prod_solver.js');
+
+function makeFloor(v){
+  const buf = new SharedArrayBuffer(4);
+  const arr = new Int32Array(buf);
+  Atomics.store(arr, 0, v);
+  return arr;
+}
+
+function legalCheck(form, xi){
+  // basic legality: one card per slot position-eligible, no duplicate hold groups
+  const seen = new Set();
+  for(let i=0;i<xi.length;i++){
+    const c = xi[i];
+    if(!c.pos.includes(form.slots[i])) return false;
+    const g = (c.hold!==null&&c.hold!==undefined) ? 'H:'+c.hold : 'S:'+c.id;
+    if(seen.has(g)) return false;
+    seen.add(g);
+  }
+  return true;
+}
+
+function runTest(numDrafts){
+  let checked=0;
+  let tieBoundaryFail=0;      // floor==true optimum must still find/record it
+  let overshootFail=0;        // result must never exceed true optimum
+  let fabricationFail=0;      // floor set above achievable must not fabricate a completion
+  let siblingSplitFail=0;     // partitioned-worker-vs-sibling-floor scenario
+
+  for(let s=0;s<numDrafts;s++){
+    const draft = generate(s*13+3);
+    if(draft.cards.length < 4) continue;
+    // keep instances small enough for the brute oracle to finish fast
+    let combos=1; let bad=false;
+    for(const slot of draft.form.slots){
+      const n = draft.cards.filter(c=>c.pos.includes(slot)).length;
+      if(n===0){bad=true;break;}
+      combos*=n;
+    }
+    if(bad || combos>200000) continue;
+    const oracle = bruteForce(draft.form, draft.cards, scoreXI, {});
+    if(oracle.infeasible || oracle.best<0) continue;
+    checked++;
+    const trueBest = oracle.best;
+
+    // (1) floor == trueBest exactly, full candidate set (no rootAllow restriction) -- must still
+    // find and record a completion at exactly trueBest, not silently drop it.
+    {
+      const floor = makeFloor(trueBest);
+      const r = solveBest(draft.form, draft.cards, 5_000_000, 99, undefined, undefined, false, undefined, undefined, undefined, floor, undefined);
+      if(r.best !== trueBest) tieBoundaryFail++;
+      if(r.best > trueBest + 1e-9) overshootFail++;
+    }
+
+    // (2) floor == trueBest + 1 (unreachable), full candidate set -- must never report a score
+    // above trueBest (it can't fabricate a completion that doesn't exist); per the changelog it
+    // should come back empty/at the seed since nothing can beat an unreachable floor at a leaf.
+    {
+      const floor = makeFloor(trueBest + 1);
+      const r = solveBest(draft.form, draft.cards, 5_000_000, 99, undefined, undefined, false, undefined, undefined, undefined, floor, undefined);
+      if(r.best > trueBest) { overshootFail++; fabricationFail++; }
+      // r.bestXIs, if any, must still be legal completions and must not claim total>=floor
+      for(const b of (r.bestXIs||[])){
+        if(!legalCheck(draft.form, b.xi)) fabricationFail++;
+        if(b.sc.total >= trueBest+1) fabricationFail++;
+      }
+    }
+
+    // (3) REAL split-worker shape: partition the root slot's candidates into two disjoint halves
+    // (rootAllow), give "worker 2" a floor seeded from "worker 1"'s true best on ITS half, and
+    // confirm worker 2 (a) never fabricates above the true GLOBAL best, and (b) if worker 2's own
+    // half can't beat worker 1's floor, it safely returns a best at or below that floor rather
+    // than inventing something higher -- while the MERGE of both workers still recovers the true
+    // global optimum (the actual soundness property _mergeWorkerResults depends on).
+    {
+      const order = draft.form.slots.map((s,i)=>i).sort((a,b)=>
+        draft.cards.filter(c=>c.pos.includes(draft.form.slots[a])).length -
+        draft.cards.filter(c=>c.pos.includes(draft.form.slots[b])).length);
+      const rootSlotIdx = order[0];
+      const rootSlotLabel = draft.form.slots[rootSlotIdx];
+      const rootCandIds = draft.cards.filter(c=>c.pos.includes(rootSlotLabel)).map(c=>c.id);
+      if(rootCandIds.length >= 2){
+        const half = Math.ceil(rootCandIds.length/2);
+        const allowA = new Set(rootCandIds.slice(0,half));
+        const allowB = new Set(rootCandIds.slice(half));
+        if(allowA.size>0 && allowB.size>0){
+          const rA = solveBest(draft.form, draft.cards, 5_000_000, 99, undefined, undefined, false, undefined, allowA, undefined, undefined, rootSlotIdx);
+          const floorFromA = makeFloor(rA.best);
+          const rB = solveBest(draft.form, draft.cards, 5_000_000, 99, undefined, undefined, false, undefined, allowB, undefined, floorFromA, rootSlotIdx);
+          // rB must never exceed the true global optimum
+          if(rB.best > trueBest) { overshootFail++; siblingSplitFail++; }
+          // merged answer (max of the two partitions) must equal the true global optimum --
+          // this is the actual property the whole mechanism exists to preserve
+          const merged = Math.max(rA.best, rB.best);
+          if(merged !== trueBest) siblingSplitFail++;
+        }
+      }
+    }
+  }
+  return { checked, tieBoundaryFail, overshootFail, fabricationFail, siblingSplitFail };
+}
+
+if(require.main===module){
+  const r = runTest(4000);
+  console.log('=== B) sharedFloor forced to exact boundary values ===');
+  console.log(`checked: ${r.checked}`);
+  console.log(`(1) floor==trueBest, dropped-tie failures: ${r.tieBoundaryFail} (expect 0)`);
+  console.log(`(2) floor==trueBest+1, overshoot/fabrication failures: ${r.overshootFail}/${r.fabricationFail} (expect 0/0)`);
+  console.log(`(3) real split-worker (partition+sibling floor), soundness failures: ${r.siblingSplitFail} (expect 0)`);
+  const fail = r.tieBoundaryFail||r.overshootFail||r.fabricationFail||r.siblingSplitFail;
+  console.log(fail? 'FAIL' : 'PASS');
+  if(fail) process.exitCode=1;
+}
+module.exports = { runTest };
+-->
+
+
+<!-- ===== FILE: test_C_cas_concurrency.js ===== -->
+<!--
+'use strict';
+// ==========================================================================================
+// TEST C) The CAS-max publish loop, under REAL concurrency.
+// Verbatim copy of the retry loop at index.html:8433-8434 (the exact code every dfs() leaf
+// runs to publish a new incumbent). Tested here with actual OS threads (worker_threads), not a
+// single-threaded simulation -- a simulated interleaving can accidentally never exercise the
+// real race window, the same way v1's DAC generator never exercised its collision branch. This
+// spawns real threads hammering ONE shared Int32Array simultaneously and checks the final value
+// is the true max of every value any thread attempted, with zero lost updates.
+// ==========================================================================================
+const { Worker, isMainThread, workerData, parentPort } = require('worker_threads');
+
+const WORKER_CODE = `
+const { parentPort, workerData } = require('worker_threads');
+const { sab, attemptsPerThread, seed } = workerData;
+const floor = new Int32Array(sab);
+let s = seed >>> 0;
+function rnd(){ s = (s*1664525+1013904223)>>>0; return s; }
+const attempted = [];
+for(let i=0;i<attemptsPerThread;i++){
+  const v = rnd() % 1000000; // candidate "score" this thread found
+  attempted.push(v);
+  // ===== verbatim retry loop under test =====
+  let __cur = Atomics.load(floor, 0);
+  while (v > __cur) { const __prev = Atomics.compareExchange(floor, 0, __cur, v); if (__prev === __cur) break; __cur = __prev; }
+  // ===========================================
+}
+parentPort.postMessage(attempted);
+`;
+
+async function runOnce(numThreads, attemptsPerThread, seedBase){
+  const sab = new SharedArrayBuffer(4);
+  const floor = new Int32Array(sab);
+  Atomics.store(floor, 0, -1);
+
+  const fs = require('fs');
+  const path = require('os').tmpdir() + '/_cas_worker_' + process.pid + '_' + Math.random().toString(36).slice(2) + '.js';
+  fs.writeFileSync(path, WORKER_CODE);
+
+  const promises = [];
+  for(let i=0;i<numThreads;i++){
+    promises.push(new Promise((resolve,reject)=>{
+      const w = new Worker(path, { workerData: { sab, attemptsPerThread, seed: seedBase+i*7919 } });
+      w.on('message', resolve);
+      w.on('error', reject);
+    }));
+  }
+  const allAttempted = (await Promise.all(promises)).flat();
+  fs.unlinkSync(path);
+
+  const finalVal = Atomics.load(floor, 0);
+  const trueMax = Math.max(-1, ...allAttempted);
+  return { finalVal, trueMax, ok: finalVal === trueMax };
+}
+
+async function main(){
+  console.log('=== C) sharedFloor CAS-max publish loop, real OS-thread concurrency ===');
+  let rounds=0, fails=0;
+  const NUM_ROUNDS = 12;
+  for(let r=0;r<NUM_ROUNDS;r++){
+    const numThreads = 2 + (r % 6); // 2..7 real threads
+    const attemptsPerThread = 4000;
+    const res = await runOnce(numThreads, attemptsPerThread, r*104729+1);
+    rounds++;
+    if(!res.ok){
+      fails++;
+      console.log(`  round ${r} (${numThreads} threads): LOST UPDATE -- final=${res.finalVal} true max=${res.trueMax}`);
+    }
+  }
+  console.log(`rounds: ${rounds}  lost-update failures: ${fails} (expect 0)`);
+  console.log(fails===0 ? 'PASS' : 'FAIL');
+  if(fails>0) process.exitCode=1;
+}
+
+if(isMainThread) main();
+-->
+
+
+<!-- ===== FILE: test_D_multiworker_e2e.js ===== -->
+<!--
+'use strict';
+// ==========================================================================================
+// TEST D) Full multi-worker pipeline, real threads, merged, vs independent brute force.
+// Mirrors _runSolveParallel + _mergeWorkerResults as closely as Node allows: real worker_threads
+// (not a single-thread simulation), one real SharedArrayBuffer-backed Int32Array floor shared by
+// all of them, root candidates partitioned round-robin (both UNSORTED and item-7c SORTED, to
+// prove the sort is answer-invariant), each worker running the ACTUAL solveBest extracted
+// verbatim from the live file. Merge logic mirrors _mergeWorkerResults (max best, union of tied
+// bestXIs). Checked against indep_brute.js, which shares no code with the solver.
+//
+// Per the DAC lesson, half the instances here are engineered (not just randomly drawn) so the
+// floor is likely to actually bind: one root-partition is seeded with visibly higher-rated cards
+// than the other, so the "strong" worker's incumbent should race ahead and prune the "weak"
+// worker's subtree -- the actual condition item 7b exists to exploit, not left to chance.
+// ==========================================================================================
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
+const { Worker, isMainThread } = require('worker_threads');
+const { generate } = require('./fuzz_gen.js');
+const { bruteForce } = require('./indep_brute.js');
+const { scoreXI, solveBest } = require('./prod_solver.js');
+
+const SOLVER_SRC = fs.readFileSync(path.join(__dirname, 'prod_solver.js'), 'utf8')
+  .replace(/module\.exports[\s\S]*$/, ''); // strip the require()-only export line for inlining into a worker
+
+const WORKER_WRAPPER = `
+const { parentPort, workerData } = require('worker_threads');
+${SOLVER_SRC}
+const { form, cards, cap, allowIds, rootSlotIdx, sab, seedBest } = workerData;
+const sharedFloor = sab ? new Int32Array(sab) : undefined;
+const rootAllow = allowIds ? new Set(allowIds) : undefined;
+const r = solveBest(form, cards, cap, 99, seedBest, undefined, false, undefined, rootAllow, undefined, sharedFloor, rootSlotIdx);
+parentPort.postMessage({ best: r.best, bestXIs: (r.bestXIs||[]).map(b=>({ ids: b.xi.map(c=>c.id), total: b.sc.total })), nodes: r.nodes });
+`;
+
+function runWorker(tmpPath, workerData){
+  return new Promise((resolve,reject)=>{
+    const w = new Worker(tmpPath, { workerData });
+    w.on('message', resolve);
+    w.on('error', reject);
+  });
+}
+
+function sortRootCands(rootCandsIn){
+  const rootCands = rootCandsIn.slice();
+  const __rn={},__rc={};
+  for(const c of rootCands){__rn[c.nation]=(__rn[c.nation]||0)+1;if(c.type==='normal')__rc[c.club]=(__rc[c.club]||0)+1;}
+  rootCands.sort((a,b)=>{
+    const ka=a.rating+0.4/(__rn[a.nation]||1)+(a.type==='normal'?0.4/(__rc[a.club]||1):0);
+    const kb=b.rating+0.4/(__rn[b.nation]||1)+(b.type==='normal'?0.4/(__rc[b.club]||1):0);
+    return kb-ka;
+  });
+  return rootCands;
+}
+
+function pickRootSlot(draft){
+  const order = draft.form.slots.map((s,i)=>i).sort((a,b)=>
+    draft.cards.filter(c=>c.pos.includes(draft.form.slots[a])).length -
+    draft.cards.filter(c=>c.pos.includes(draft.form.slots[b])).length);
+  // pick the biggest-pooled slot as axis, same intent as production's axis-selection loop
+  let best=order[0], bestN=-1;
+  for(const idx of order){
+    const n = draft.cards.filter(c=>c.pos.includes(draft.form.slots[idx])).length;
+    if(n>bestN){bestN=n;best=idx;}
+  }
+  return best;
+}
+
+function skewRatings(draft, rootSlotIdx){
+  // engineer a rating skew across the eventual partitions so the floor is likely to bind:
+  // sort candidates by id (arrival order, pre-partition) and boost every OTHER card's rating,
+  // so a round-robin partition puts high ratings mostly in one half.
+  const label = draft.form.slots[rootSlotIdx];
+  const rootCards = draft.cards.filter(c=>c.pos.includes(label));
+  rootCards.forEach((c,i)=>{ if(i%2===0) c.rating = Math.min(99, c.rating+15); });
+  return draft;
+}
+
+async function runInstance(draft, W, sorted){
+  // NOTE: any rating skew must already be baked into `draft` by the caller BEFORE this is
+  // called, and BEFORE the brute-force oracle runs on the same draft -- applying it here (after
+  // the oracle already scored an unskewed copy) would compare the solver against the wrong
+  // instance. (This was caught by the harness's own first run: every "mismatch" was solver >
+  // brute, which is the tell that the oracle and solver were silently scoring different data,
+  // not a real soundness bug -- see the run log below.)
+  const rootSlotIdx = pickRootSlot(draft);
+  const label = draft.form.slots[rootSlotIdx];
+  let rootCands = draft.cards.filter(c=>c.pos.includes(label));
+  if(rootCands.length < W) return null; // not enough candidates to actually split W ways
+  if(sorted) rootCands = sortRootCands(rootCands);
+  const parts = Array.from({length:W},()=>[]);
+  rootCands.forEach((c,i)=>parts[i%W].push(c.id));
+
+  const tmpPath = path.join(os.tmpdir(), `_solver_worker_${process.pid}_${Math.random().toString(36).slice(2)}.js`);
+  fs.writeFileSync(tmpPath, WORKER_WRAPPER);
+
+  const sab = new SharedArrayBuffer(4);
+  const floorArr = new Int32Array(sab);
+  Atomics.store(floorArr, 0, -1);
+
+  try{
+    const results = await Promise.all(parts.map(allowIds =>
+      runWorker(tmpPath, { form: draft.form, cards: draft.cards, cap: 3_000_000, allowIds, rootSlotIdx, sab, seedBest: -1 })
+    ));
+    // merge exactly like _mergeWorkerResults: max best, union of tied bestXIs
+    let best=-1, bestXIs=[], nodes=0;
+    for(const r of results){
+      nodes += r.nodes||0;
+      if(r.best>best){best=r.best;bestXIs=r.bestXIs.slice();}
+      else if(r.best===best && r.best>=0){
+        const keys=new Set(bestXIs.map(x=>x.ids.slice().sort((a,b)=>a-b).join(',')));
+        for(const x of r.bestXIs){const k=x.ids.slice().sort((a,b)=>a-b).join(',');if(!keys.has(k)){keys.add(k);bestXIs.push(x);}}
+      }
+    }
+    return { best, bestXIs, nodes, floorFinal: Atomics.load(floorArr,0) };
+  } finally {
+    fs.unlinkSync(tmpPath);
+  }
+}
+
+async function main(){
+  console.log('=== D) full multi-worker pipeline (real threads, real shared floor) vs brute force ===');
+  let checked=0, mismatches=0, illegalXi=0, floorBoundInstances=0;
+  const NUM_INSTANCES = 100; // real OS threads are expensive; kept moderate but every instance is a genuine multi-thread run
+  for(let s=0;s<NUM_INSTANCES;s++){
+    const draft = generate(s*257+11);
+    let combos=1, bad=false;
+    for(const slot of draft.form.slots){
+      const n = draft.cards.filter(c=>c.pos.includes(slot)).length;
+      if(n===0){bad=true;break;}
+      combos*=n;
+    }
+    if(bad || combos>50000 || draft.cards.length<6) continue;
+
+    const W = 2 + (s%3); // 2,3,4 workers
+    const sorted = (s%2===0);
+    const skew = (s%2===0); // engineer half the instances to make the floor likely to bind
+
+    // apply skew (if any) BEFORE the oracle sees the draft, so oracle and solver score the
+    // identical instance -- see note in runInstance()
+    if(skew){
+      const rootSlotIdx = pickRootSlot(draft);
+      skewRatings(draft, rootSlotIdx);
+    }
+
+    const oracle = bruteForce(draft.form, draft.cards, scoreXI, {});
+    if(oracle.infeasible) continue;
+
+    const res = await runInstance(JSON.parse(JSON.stringify(draft)), W, sorted);
+    if(res===null) continue;
+    checked++;
+    if(res.floorFinal >= 0) floorBoundInstances++;
+
+    if(res.best !== oracle.best){
+      mismatches++;
+      console.log(`  MISMATCH instance ${s}: solver(merged,W=${W},sorted=${sorted})=${res.best} vs brute=${oracle.best}`);
+    }
+    for(const b of res.bestXIs){
+      const xi = b.ids.map(id => draft.cards.find(c=>c.id===id));
+      if(xi.some(c=>!c)){ illegalXi++; continue; }
+      const seen = new Set(); let legal = true;
+      for(let i=0;i<xi.length;i++){
+        if(!xi[i].pos.includes(draft.form.slots[i])){legal=false;break;}
+        const g = (xi[i].hold!==null&&xi[i].hold!==undefined)?('H:'+xi[i].hold):('S:'+xi[i].id);
+        if(seen.has(g)){legal=false;break;} seen.add(g);
+      }
+      if(!legal || b.total!==res.best) illegalXi++;
+    }
+  }
+  console.log(`checked (real multi-thread runs): ${checked}`);
+  console.log(`floor actually bound (>=0 by end) in: ${floorBoundInstances}/${checked} instances`);
+  console.log(`merged-answer mismatches vs independent brute force: ${mismatches} (expect 0)`);
+  console.log(`illegal/misscored bestXIs returned: ${illegalXi} (expect 0)`);
+  const fail = mismatches>0 || illegalXi>0;
+  console.log(fail ? 'FAIL' : 'PASS');
+  if(fail) process.exitCode=1;
+}
+
+if(isMainThread) main();
+-->
+
+
+<!-- ===== FILE: test_E_absent_regression.js ===== -->
+<!--
+'use strict';
+// ==========================================================================================
+// TEST E) sharedFloor/rootSlotIdx ABSENT -- regression check on the untouched default path.
+// Every call site that doesn't opt in (serial solves, bench/manager, completeOOP, non-worker
+// fallback) passes sharedFloor:undefined. This confirms that path still returns the true
+// optimum against the independent brute-force oracle across all 11 synthetic regimes -- i.e.
+// item 7's new params didn't perturb the code every OTHER caller still depends on.
+// ==========================================================================================
+const { generate, REGIMES } = require('./fuzz_gen.js');
+const { bruteForce } = require('./indep_brute.js');
+const { scoreXI, solveBest } = require('./prod_solver.js');
+
+function runTest(trials){
+  let checked=0, mismatches=0;
+  const perRegime = {};
+  for(let t=0;t<trials;t++){
+    const draft = generate(t);
+    perRegime[draft.regime] = perRegime[draft.regime] || {checked:0, mismatches:0};
+    let combos=1, bad=false;
+    for(const slot of draft.form.slots){
+      const n = draft.cards.filter(c=>c.pos.includes(slot)).length;
+      if(n===0){bad=true;break;}
+      combos*=n;
+    }
+    if(bad || combos>300000) continue;
+    const oracle = bruteForce(draft.form, draft.cards, scoreXI, {});
+    if(oracle.infeasible) continue;
+    const r = solveBest(draft.form, draft.cards, 5_000_000, 99, undefined, undefined, false, undefined, undefined, undefined, undefined, undefined);
+    checked++; perRegime[draft.regime].checked++;
+    if(r.best !== oracle.best){
+      mismatches++; perRegime[draft.regime].mismatches++;
+      console.log(`  MISMATCH seed ${t} regime ${draft.regime}: solver=${r.best} brute=${oracle.best}`);
+    }
+  }
+  return {checked, mismatches, perRegime};
+}
+
+if(require.main===module){
+  const r = runTest(3000);
+  console.log('=== E) sharedFloor-absent regression, all synthetic regimes ===');
+  for(const reg of REGIMES){
+    const p = r.perRegime[reg];
+    if(p) console.log(`  ${reg.padEnd(12)} checked=${p.checked}  mismatches=${p.mismatches}`);
+  }
+  console.log(`TOTAL checked: ${r.checked}  mismatches: ${r.mismatches} (expect 0)`);
+  console.log(r.mismatches===0 ? 'PASS' : 'FAIL');
+  if(r.mismatches>0) process.exitCode=1;
+}
+module.exports = { runTest };
+-->
+
+
+<!-- ===== FILE: run_all.js ===== -->
+<!--
+'use strict';
+const { execFileSync } = require('child_process');
+const tests = [
+  'test_A_sort_isolated.js',
+  'test_B_floor_forced.js',
+  'test_C_cas_concurrency.js',
+  'test_D_multiworker_e2e.js',
+  'test_E_absent_regression.js',
+];
+let allOk = true;
+for(const t of tests){
+  console.log('\n' + '='.repeat(90));
+  console.log('RUNNING ' + t);
+  console.log('='.repeat(90));
+  try{
+    const out = execFileSync('node', [t], {cwd:__dirname, encoding:'utf8'});
+    process.stdout.write(out);
+  }catch(e){
+    allOk = false;
+    process.stdout.write(e.stdout||'');
+    console.log('*** ' + t + ' EXITED NON-ZERO ***');
+  }
+}
+console.log('\n' + '='.repeat(90));
+console.log(allOk ? 'ALL SUITES PASSED' : 'AT LEAST ONE SUITE FAILED');
 -->
 
 <!-- ===== END APPENDIX: SOUNDNESS HARNESS SOURCE ===== -->
